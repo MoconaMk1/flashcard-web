@@ -91,3 +91,24 @@ def save_stats(sheet_name, stats_dict):
     for w, data in stats_dict.items():
         rows.append([w, data["correct"], data["wrong"]])
     worksheet.update("A1", rows)
+
+# 🎯 여러 시트의 데이터를 하나로 합쳐서 가져오는 업무
+def load_multiple_sheets(sheet_names):
+    all_words = {}
+    all_notes = {}
+    all_stats = {}
+    
+    for name in sheet_names:
+        try:
+            # 단어 로드
+            w, n = load_words_from_sheet(name)
+            all_words.update(w)
+            all_notes.update(n)
+            
+            # 통계 로드
+            s = load_stats(name)
+            all_stats.update(s)
+        except:
+            continue # 에러 나는 시트는 건너뜁니다.
+            
+    return all_words, all_notes, all_stats
