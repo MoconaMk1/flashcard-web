@@ -4,20 +4,10 @@ from gtts import gTTS
 import io
 import random
 import base64
-import time
+import streamlit.components.v1 as components
 
 # 1. 브라우저 설정
 st.set_page_config(page_title="Veha's English", page_icon="📖", layout="centered")
-
-# 🎯 [수정] 오디오 재생바 완벽 숨김 및 버튼 스타일 정리
-st.markdown("""
-    <style>
-    .stButton>button {
-        border-radius: 10px;
-        margin-bottom: -5px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
 
 # 2. 앱의 기억력 세팅
 if 'word_list' not in st.session_state:
@@ -41,25 +31,68 @@ if 'word_list' not in st.session_state:
     st.session_state.test_answered = False
     st.session_state.test_options = []
     st.session_state.test_msg = ""
+    
+if 'play_audio_b64' not in st.session_state:
+    st.session_state.play_audio_b64 = None
 
-# 🎯 [수정] 깜빡임 없이 무한대로 즉시 재생되는 오디오 조수!
+# 🎯 [수정] 단어 목록용 오디오 준비 (화면 맨 밑에서 재생되도록 기억만 해둠)
 def play_audio(text):
     tts = gTTS(text=text, lang='en')
     fp = io.BytesIO()
     tts.write_to_fp(fp)
     fp.seek(0)
-    b64 = base64.b64encode(fp.read()).decode()
-    unique_id = str(time.time()) # 매번 새로운 소리인 것처럼 브라우저 속이기!
-    
-    # 안 보이는 HTML 오디오 태그를 화면에 슬쩍 끼워 넣어서 즉시 재생시킵니다.
+    st.session_state.play_audio_b64 = base64.b64encode(fp.read()).decode()
+
+# 🎯 [수정] 크고 예쁜 클릭형 플래시카드 조수! (자바스크립트 즉시 재생)
+def render_clickable_card(text, color, audio_text=None):
+    b64_audio = ""
+    if audio_text:
+        tts = gTTS(text=audio_text, lang='en')
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        fp.seek(0)
+        b64_audio = base64.b64encode(fp.read()).decode()
+        
+    audio_tag = f'<audio id="card_audio" src="data:audio/mp3;base64,{b64_audio}"></audio>' if b64_audio else ""
+    click_action = 'document.getElementById("card_audio").play()' if b64_audio else ""
+    cursor = "pointer" if b64_audio else "default"
+    hint_text = '<div class="hint">👆 클릭하여 발음 듣기</div>' if b64_audio else ''
+
     html = f"""
-    <div style="width:0px; height:0px; overflow:hidden;">
-        <audio id="{unique_id}" autoplay="true">
-            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-        </audio>
-    </div>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ margin: 0; padding: 0; background-color: transparent; }}
+            .card {{
+                cursor: {cursor};
+                background-color: #f0f2f6;
+                border-radius: 15px;
+                padding: 20px;
+                text-align: center;
+                border: 3px solid {color};
+                height: 220px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                box-sizing: border-box;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            }}
+            h1 {{ color: {color}; font-size: 2.8rem; margin: 0; font-weight: bold; }}
+            .hint {{ color: #7f8c8d; font-size: 0.9rem; margin-top: 15px; }}
+        </style>
+    </head>
+    <body>
+        <div class="card" onclick='{click_action}'>
+            <h1>{text}</h1>
+            {hint_text}
+            {audio_tag}
+        </div>
+    </body>
+    </html>
     """
-    st.markdown(html, unsafe_allow_html=True)
+    components.html(html, height=240)
 
 # --- 기능 조수 함수들 ---
 def prepare_question():
@@ -167,7 +200,7 @@ else:
             with st.container(border=True):
                 cols = st.columns([0.85, 0.15])
                 
-                # 🎯 [버그 해결] 누를 때마다 백그라운드 재생 & 화면 깜빡임 제거
+                # 🎯 [수정] 누르면 소리가 나되, 덜컹거리지 않도록 로직 분리
                 if cols[0].button(f"**{w}** : {mean}", key=f"btn_w_{w}", use_container_width=True):
                     play_audio(w) 
                 
@@ -196,11 +229,8 @@ else:
         front_text, front_color = (current_word, "#2980B9") if not st.session_state.show_meaning else (mean, "#D35400")
         if not is_w2m: front_text, front_color = (mean, "#2980B9") if not st.session_state.show_meaning else (current_word, "#D35400")
 
-        # 🎯 [버그 해결] 카드 클릭 시 깜빡임 없이 무한 재생
-        if st.button(f"**{front_text}**", key="main_card_btn", use_container_width=True, help="클릭하면 발음이 나옵니다"):
-            play_audio(current_word)
-        
-        st.markdown(f'<div style="text-align: center; color: {front_color}; padding: 10px;">👆 카드를 누르면 소리가 납니다!</div>', unsafe_allow_html=True)
+        # 🎯 [수정] 예쁘고 크고 통통한 카드 복구! 누르면 즉시 재생됩니다.
+        render_clickable_card(front_text, front_color, audio_text=current_word)
         
         if note and st.session_state.show_meaning: st.info(f"💡 {note}")
         
@@ -210,9 +240,6 @@ else:
         if col2.button("➡️ 다음 단어", use_container_width=True, type="primary"):
             st.session_state.current_idx = (st.session_state.current_idx + 1) % len(st.session_state.word_list)
             st.session_state.show_meaning = False; st.rerun()
-            
-        if st.button("🔊 발음 듣기", use_container_width=True):
-            play_audio(current_word)
 
     # --- [탭 3] 시험 모드 ---
     with tab_test:
@@ -229,15 +256,15 @@ else:
             current_w = st.session_state.test_queue[st.session_state.test_q_count]
             
             if st.session_state.test_type == "객관식":
-                # 🎯 [버그 해결] 문제 클릭 시 깜빡임 없이 무한 재생
-                if st.button(f"🔊 **{current_w}**", key="test_q_audio", use_container_width=True):
-                    play_audio(current_w)
+                # 🎯 [수정] 객관식 문제도 예쁜 카드로 출력
+                render_clickable_card(current_w, "#2C3E50", audio_text=current_w)
                 
                 if not st.session_state.test_answered:
                     for opt in st.session_state.test_options:
                         if st.button(opt, use_container_width=True): submit_mcq(opt); st.rerun()
             else:
-                st.markdown(f"<h2 style='text-align: center;'>{st.session_state.words[current_w]}</h2>", unsafe_allow_html=True)
+                # 🎯 [수정] 스펠링 문제(한글)도 카드로 출력 (소리는 안 남)
+                render_clickable_card(st.session_state.words[current_w], "#2C3E50")
                 if not st.session_state.test_answered:
                     with st.form(f"f_{st.session_state.test_q_count}"):
                         u = st.text_input("영어 입력:"); 
@@ -246,7 +273,7 @@ else:
             if st.session_state.test_answered:
                 st.success(st.session_state.test_msg) if "⭕" in st.session_state.test_msg else st.error(st.session_state.test_msg)
                 
-                # 정답 확인 시 자동 재생!
+                # 🎯 정답 확인 시 자동 재생
                 play_audio(current_w)
                 
                 if st.session_state.test_q_count < st.session_state.test_q_max - 1:
@@ -262,3 +289,17 @@ else:
                 with st.container(border=True):
                     st.write(f"**{w}** : {st.session_state.words.get(w, '')}")
                     st.caption(f"⭕ {d['correct']} | ❌ {d['wrong']}")
+
+# ==========================================
+# 🎯 [핵심] 덜컹거림 완벽 차단 로직
+# ==========================================
+# 단어 목록 등에서 버튼을 눌렀을 때 생성된 오디오를, 화면 맨~~~ 밑바닥 보이지 않는 곳에서 재생합니다!
+if st.session_state.play_audio_b64:
+    html = f"""
+    <audio autoplay="true">
+        <source src="data:audio/mp3;base64,{st.session_state.play_audio_b64}" type="audio/mp3">
+    </audio>
+    """
+    # width=0, height=0 이라서 화면에 아무런 영향을 주지 않습니다.
+    components.html(html, width=0, height=0)
+    st.session_state.play_audio_b64 = None
