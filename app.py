@@ -9,24 +9,19 @@ import streamlit.components.v1 as components
 # 1. 브라우저 설정
 st.set_page_config(page_title="Veha's English", page_icon="📖", layout="centered")
 
-# 🎯 [수정] 복잡한 가로 분할 CSS를 모두 제거하고, 가장 안정적인 세팅만 남겼습니다.
+# 🎯 모바일 화면 가로 스크롤 완전 차단 및 기본 스타일
 st.markdown("""
     <style>
-    /* 1. 가로 스크롤 원천 차단 (보험용) */
     html, body, [data-testid="stAppViewContainer"], .main {
         overflow-x: hidden !important;
         max-width: 100vw !important;
     }
-
-    /* 2. 메인 타이틀 자동 축소 */
     .main-title {
         font-size: clamp(1.4rem, 6vw, 2.5rem);
         font-weight: 800;
         margin-bottom: 1rem;
         padding-top: 1rem;
     }
-    
-    /* 3. 버튼 텍스트 줄바꿈 및 좌측 정렬 */
     .stButton>button {
         border-radius: 10px;
         min-height: 2.8rem;
@@ -35,8 +30,6 @@ st.markdown("""
         text-align: left !important;
         word-break: break-word !important; 
     }
-    
-    /* 4. 포스트잇(popover) 버튼 디자인을 단어 버튼과 어울리게 수정 */
     .stPopover > button {
         border-radius: 10px !important;
         border: 1px dashed #f39c12 !important;
@@ -53,11 +46,14 @@ if 'word_list' not in st.session_state:
     st.session_state.word_list = []
     st.session_state.current_idx = 0
     st.session_state.show_meaning = False
-    st.session_state.direction = "W2M"
     st.session_state.is_admin = False
     st.session_state.current_sheet = ""
     st.session_state.stats = {}
     st.session_state.saved_sheets = ["영어"]
+    
+    # 🎯 방향 설정을 영구 기억력에 등록!
+    st.session_state.card_direction = "단어 ➔ 뜻" 
+    
     st.session_state.test_active = False
     st.session_state.test_type = "객관식"
     st.session_state.test_q_max = 0
@@ -79,57 +75,45 @@ def play_audio(text):
     fp.seek(0)
     st.session_state.play_audio_b64 = base64.b64encode(fp.read()).decode()
 
-# 클릭형 플래시카드 조수
-def render_clickable_card(text, color, audio_text=None):
-    b64_audio = ""
-    if audio_text:
-        tts = gTTS(text=audio_text, lang='en')
-        fp = io.BytesIO()
-        tts.write_to_fp(fp)
-        fp.seek(0)
-        b64_audio = base64.b64encode(fp.read()).decode()
-        
-    audio_tag = f'<audio id="card_audio" src="data:audio/mp3;base64,{b64_audio}"></audio>' if b64_audio else ""
-    click_action = 'document.getElementById("card_audio").play()' if b64_audio else ""
-    cursor = "pointer" if b64_audio else "default"
-    hint_text = '<div class="hint">👆 클릭하여 발음 듣기</div>' if b64_audio else ''
-
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            body {{ margin: 0; padding: 0; background-color: transparent; overflow: hidden; width: 100%; box-sizing: border-box; }}
-            .card {{
-                cursor: {cursor};
-                background-color: #f0f2f6;
-                border-radius: 15px;
-                padding: 20px;
-                text-align: center;
-                border: 3px solid {color};
-                height: 220px;
-                width: 100%;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                align-items: center;
-                box-sizing: border-box;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            }}
-            h1 {{ color: {color}; font-size: clamp(1.8rem, 7vw, 2.8rem); margin: 0; font-weight: bold; word-break: keep-all; }}
-            .hint {{ color: #7f8c8d; font-size: 0.9rem; margin-top: 15px; }}
-        </style>
-    </head>
-    <body>
-        <div class="card" onclick='{click_action}'>
-            <h1>{text}</h1>
-            {hint_text}
-            {audio_tag}
-        </div>
-    </body>
-    </html>
-    """
-    components.html(html, height=240)
+# 🎯 [수정] 순수 파이썬 코드로 작동하는 거대 플래시카드 버튼 조수!
+def render_giant_button(text, hint, color, key):
+    st.markdown(f"""
+    <div id="anchor-{key}"></div>
+    <style>
+    div:has(#anchor-{key}) + div button {{
+        height: 220px !important;
+        border: 3px solid {color} !important;
+        border-radius: 15px !important;
+        background-color: #f0f2f6 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: center !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important;
+        transition: transform 0.1s ease !important;
+    }}
+    div:has(#anchor-{key}) + div button:active {{
+        transform: scale(0.97) !important;
+    }}
+    div:has(#anchor-{key}) + div button p:nth-of-type(1) {{
+        font-size: clamp(2rem, 8vw, 2.8rem) !important;
+        font-weight: bold !important;
+        color: {color} !important;
+        margin: 0 !important;
+        text-align: center !important;
+        width: 100% !important;
+    }}
+    div:has(#anchor-{key}) + div button p:nth-of-type(2) {{
+        font-size: 0.9rem !important;
+        color: #7f8c8d !important;
+        margin-top: 15px !important;
+        text-align: center !important;
+        width: 100% !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+    # 버튼을 렌더링하고, 클릭 여부를 반환합니다.
+    return st.button(f"{text}\n\n{hint}", key=key, use_container_width=True)
 
 # --- 시험 및 통계 로직 ---
 def prepare_question():
@@ -203,8 +187,9 @@ with st.sidebar:
 
     st.divider()
     st.write("🔄 카드 방향 설정")
-    direction = st.radio("방향", ["단어 ➔ 뜻", "뜻 ➔ 단어"], label_visibility="collapsed")
-    st.session_state.direction = "W2M" if direction == "단어 ➔ 뜻" else "M2W"
+    
+    # 🎯 [수정] 영구 기억력(card_direction)과 라디오 버튼을 하나로 묶어 고정시킵니다!
+    st.radio("방향", ["단어 ➔ 뜻", "뜻 ➔ 단어"], key="card_direction", label_visibility="collapsed")
 
     st.divider()
     st.header("🔐 관리자 모드")
@@ -235,14 +220,9 @@ else:
             mean = st.session_state.words[w]
             note = st.session_state.notes.get(w, "").strip()
             with st.container(border=True):
-                
-                # 🎯 [수정] 오류의 주범이었던 가로 배치(st.columns)를 완전히 삭제!
-                # 회원님 아이디어대로 노트가 있으면 단어 버튼 '위'에 가로 100% 크기로 예쁘게 얹어줍니다.
                 if note:
-                    with st.popover("💡 부가설명 보기", use_container_width=True): 
-                        st.info(note)
+                    with st.popover("💡 부가설명 보기", use_container_width=True): st.info(note)
                 
-                # 단어 버튼 (가로 100%)
                 if st.button(f"**{w}** : {mean}", key=f"btn_w_{w}", use_container_width=True):
                     play_audio(w) 
                 
@@ -262,18 +242,24 @@ else:
         current_word = st.session_state.word_list[st.session_state.current_idx]
         mean = st.session_state.words[current_word]
         note = st.session_state.notes.get(current_word, "")
-        is_w2m = (st.session_state.direction == "W2M")
+        
+        # 🎯 고정된 방향 설정을 가져와서 적용
+        is_w2m = (st.session_state.card_direction == "단어 ➔ 뜻")
         
         front_text, front_color = (current_word, "#2980B9") if not st.session_state.show_meaning else (mean, "#D35400")
         if not is_w2m: front_text, front_color = (mean, "#2980B9") if not st.session_state.show_meaning else (current_word, "#D35400")
 
-        render_clickable_card(front_text, front_color, audio_text=current_word)
+        # 🎯 [수정] 카드를 클릭하면 파이썬이 이를 알아채고 뒤집습니다!
+        if render_giant_button(front_text, "👆 클릭하여 뒤집기", front_color, "main_card_btn"):
+            st.session_state.show_meaning = not st.session_state.show_meaning
+            st.rerun()
         
         if note and st.session_state.show_meaning: st.info(f"💡 {note}")
         
+        # 🎯 [수정] 카드가 뒤집기 기능을 하므로, 하단 버튼을 '발음 듣기'와 '다음 단어'로 깔끔하게 변경
         col1, col2 = st.columns(2)
-        if col1.button("🔄 뒤집기", use_container_width=True):
-            st.session_state.show_meaning = not st.session_state.show_meaning; st.rerun()
+        if col1.button("🔊 발음 듣기", use_container_width=True):
+            play_audio(current_word)
         if col2.button("➡️ 다음 단어", use_container_width=True, type="primary"):
             st.session_state.current_idx = (st.session_state.current_idx + 1) % len(st.session_state.word_list)
             st.session_state.show_meaning = False; st.rerun()
@@ -293,12 +279,14 @@ else:
             current_w = st.session_state.test_queue[st.session_state.test_q_count]
             
             if st.session_state.test_type == "객관식":
-                render_clickable_card(current_w, "#2C3E50", audio_text=current_w)
+                if render_giant_button(current_w, "🔊 클릭하여 발음 듣기", "#2C3E50", "test_card_obj"):
+                    play_audio(current_w)
                 if not st.session_state.test_answered:
                     for opt in st.session_state.test_options:
                         if st.button(opt, use_container_width=True): submit_mcq(opt); st.rerun()
             else:
-                render_clickable_card(st.session_state.words[current_w], "#2C3E50")
+                if render_giant_button(st.session_state.words[current_w], "아래에 영단어를 적어주세요", "#2C3E50", "test_card_spl"):
+                    pass # 한글 뜻이므로 소리는 나지 않음
                 if not st.session_state.test_answered:
                     with st.form(f"f_{st.session_state.test_q_count}"):
                         u = st.text_input("영어 입력:"); 
