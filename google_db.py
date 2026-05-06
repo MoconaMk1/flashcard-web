@@ -62,3 +62,32 @@ def delete_word_from_sheet(sheet_name, word):
             worksheet.delete_rows(cell.row)
     except Exception as e:
         pass
+
+# 🎯 새로 추가된 '학습 통계 관리' 업무
+def init_stats_sheet(sheet_name):
+    client = get_google_client()
+    sh = client.open(sheet_name)
+    try:
+        worksheet = sh.worksheet("통계")
+    except:
+        # 통계 탭이 없으면 자동으로 새로 만듭니다!
+        worksheet = sh.add_worksheet(title="통계", rows="1000", cols="3")
+        worksheet.append_row(["단어", "맞춘횟수", "틀린횟수"])
+    return worksheet
+
+def load_stats(sheet_name):
+    worksheet = init_stats_sheet(sheet_name)
+    records = worksheet.get_all_values()[1:] # 첫 줄(제목) 제외하고 읽기
+    stats = {}
+    for row in records:
+        if len(row) >= 3:
+            stats[row[0]] = {"correct": int(row[1]), "wrong": int(row[2])}
+    return stats
+
+def save_stats(sheet_name, stats_dict):
+    worksheet = init_stats_sheet(sheet_name)
+    worksheet.clear() # 기존 데이터 지우고 새로 덮어쓰기
+    rows = [["단어", "맞춘횟수", "틀린횟수"]]
+    for w, data in stats_dict.items():
+        rows.append([w, data["correct"], data["wrong"]])
+    worksheet.update("A1", rows)
