@@ -7,7 +7,7 @@ import random
 # 1. 브라우저 설정
 st.set_page_config(page_title="Veha's English", page_icon="📖", layout="centered")
 
-# 2. 앱의 기억력 세팅 (시험 모드용 기억력 대거 추가!)
+# 2. 앱의 기억력 세팅
 if 'word_list' not in st.session_state:
     st.session_state.words = {}
     st.session_state.notes = {}
@@ -18,7 +18,6 @@ if 'word_list' not in st.session_state:
     st.session_state.is_admin = False
     st.session_state.current_sheet = ""
     
-    # 시험 모드 전용 상태
     st.session_state.test_active = False
     st.session_state.test_type = "객관식"
     st.session_state.test_q_max = 0
@@ -36,7 +35,6 @@ def get_audio_player(text):
     fp.seek(0)
     return fp
 
-# --- 시험 모드용 조수 함수 ---
 def prepare_question():
     st.session_state.test_answered = False
     st.session_state.test_msg = ""
@@ -84,7 +82,7 @@ with st.sidebar:
                     st.session_state.word_list = list(w.keys())
                     st.session_state.current_idx = 0
                     st.session_state.current_sheet = sheet_input
-                    st.session_state.test_active = False # 시트 바꾸면 시험 초기화
+                    st.session_state.test_active = False
                     st.success(f"성공! 총 {len(w)}개의 단어 로드 완료.")
                 except Exception as e:
                     st.error("시트를 찾을 수 없거나 권한이 없습니다.")
@@ -116,7 +114,6 @@ st.title("📖 Veha's English Web")
 if not st.session_state.word_list:
     st.info("👈 화면 왼쪽 위 `>` 버튼을 눌러 사이드바를 열고, 구글 시트를 먼저 불러와주세요!")
 else:
-    # 🎯 탭이 3개로 늘어났습니다!
     tab_list, tab_study, tab_test = st.tabs(["📋 단어 목록", "📖 기본 학습", "📝 시험 모드"])
 
     # --- [탭 1] 단어 목록 ---
@@ -141,6 +138,7 @@ else:
                             st.warning("단어와 뜻은 필수 입력입니다.")
             st.divider()
 
+        # 기존 단어 리스트 출력 (수정/삭제 폼 추가)
         for w in st.session_state.word_list:
             mean = st.session_state.words[w]
             note = st.session_state.notes.get(w, "")
@@ -151,6 +149,26 @@ else:
                     cols[0].caption(f"📝 {note}")
                 if cols[1].button("🔊", key=f"audio_{w}"):
                     st.audio(get_audio_player(w), format="audio/mp3", autoplay=True)
+                
+                # 🎯 관리자일 경우 각 단어 아래에 수정/삭제 서랍 제공
+                if st.session_state.is_admin:
+                    with st.expander("⚙️ 단어 수정/삭제"):
+                        edit_col1, edit_col2 = st.columns(2)
+                        with edit_col1:
+                            new_w = st.text_input("단어 변경", value=w, key=f"ew_{w}")
+                            new_m = st.text_input("뜻 변경", value=mean, key=f"em_{w}")
+                            new_n = st.text_input("설명 변경", value=note, key=f"en_{w}")
+                            if st.button("💾 수정 저장", key=f"btn_e_{w}"):
+                                with st.spinner("수정 중..."):
+                                    google_db.edit_word_in_sheet(st.session_state.current_sheet, w, new_w, new_m, new_n)
+                                    st.success("완료! 좌측 서랍에서 '데이터 불러오기'를 다시 눌러주세요.")
+                        with edit_col2:
+                            st.write(" ")
+                            st.write(" ")
+                            if st.button("🗑️ 이 단어 삭제", key=f"btn_d_{w}", type="primary"):
+                                with st.spinner("삭제 중..."):
+                                    google_db.delete_word_from_sheet(st.session_state.current_sheet, w)
+                                    st.error("삭제 완료! 좌측 서랍에서 '데이터 불러오기'를 다시 눌러주세요.")
 
     # --- [탭 2] 기본 학습 ---
     with tab_study:
@@ -203,14 +221,12 @@ else:
                 st.session_state.test_q_count = 0
                 st.session_state.test_score = 0
                 
-                # 랜덤으로 문제 뽑기
                 pool = list(st.session_state.word_list)
                 random.shuffle(pool)
                 st.session_state.test_queue = pool[:q_count]
                 prepare_question()
                 st.rerun()
         else:
-            # 시험 진행 중 화면
             progress = (st.session_state.test_q_count) / st.session_state.test_q_max
             st.progress(progress)
             st.caption(f"문제: {st.session_state.test_q_count + 1} / {st.session_state.test_q_max} (현재 점수: {st.session_state.test_score})")
@@ -237,14 +253,12 @@ else:
                             submit_spell(user_spell)
                             st.rerun()
             
-            # 정답 확인 후 피드백 및 다음 버튼
             if st.session_state.test_answered:
                 if "⭕" in st.session_state.test_msg:
                     st.success(st.session_state.test_msg)
                 else:
                     st.error(st.session_state.test_msg)
                 
-                # 발음 듣기 (복습용)
                 st.audio(get_audio_player(current_w), format="audio/mp3", autoplay=True)
                 
                 if st.session_state.test_q_count < st.session_state.test_q_max - 1:
