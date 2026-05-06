@@ -49,7 +49,7 @@ if 'word_list' not in st.session_state:
     st.session_state.is_admin = False
     st.session_state.current_sheet = ""
     st.session_state.stats = {}
-    st.session_state.saved_sheets = ["맛있는 초등 필수 영단어 01-02"]
+    st.session_state.saved_sheets = ["영어"]
     st.session_state.card_direction = "단어 ➔ 뜻" 
     
     st.session_state.test_active = False
@@ -73,7 +73,6 @@ def play_audio(text):
     fp.seek(0)
     st.session_state.play_audio_b64 = base64.b64encode(fp.read()).decode()
 
-# 🎯 [버그 해결] 타겟팅을 아주 좁게 설정하여, 오직 플래시카드만 거대해지고 다른 버튼들은 멀쩡하도록 수정!
 def render_giant_button(text, hint, color, key):
     st.markdown(f"""
     <div id="anchor-{key}"></div>
@@ -182,7 +181,7 @@ with st.sidebar:
                     st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
                     st.session_state.word_list = list(w.keys())
                     st.session_state.current_idx, st.session_state.current_sheet = 0, selected_sheets[0]
-                    st.session_state.test_active = False # 로드 시 시험 초기화
+                    st.session_state.test_active = False 
                     st.success(f"총 {len(w)}개의 단어 로드 완료!")
                 except: st.error("시트 로드 실패!")
 
@@ -262,7 +261,6 @@ else:
     # --- [탭 3] 시험 모드 ---
     with tab_test:
         if not st.session_state.test_active:
-            # 🎯 시작 화면
             test_type = st.selectbox("시험 방식", ["객관식", "스펠링"])
             q_count = st.number_input("문제 수", min_value=1, value=min(10, len(st.session_state.word_list)))
             if st.button("🚀 시작", type="primary", use_container_width=True):
@@ -271,15 +269,13 @@ else:
                 pool = list(st.session_state.word_list); random.shuffle(pool); st.session_state.test_queue = pool[:q_count]
                 prepare_question(); st.rerun()
         else:
-            # 🎯 진행 화면
             col_prog, col_stop = st.columns([7, 3])
             with col_prog:
                 st.progress(st.session_state.test_q_count / st.session_state.test_q_max)
-                st.caption(f"문제: {st.session_state.test_q_count + 1} / {st.session_state.test_q_max} (현재 점수: {st.session_state.test_score})")
+                st.caption(f"문제: {st.session_state.test_q_count + 1} / {st.session_state.test_q_max} (점수: {st.session_state.test_score})")
             
-            # 🎯 [버그 해결] 도중에 언제든 시험을 취소하고 시작 화면으로 돌아가는 버튼 추가
             with col_stop:
-                if st.button("⏹️ 시험 중단", use_container_width=True):
+                if st.button("⏹️ 중단", use_container_width=True):
                     st.session_state.test_active = False; st.rerun()
             
             current_w = st.session_state.test_queue[st.session_state.test_q_count]
@@ -299,7 +295,13 @@ else:
                         if st.form_submit_button("확인"): submit_spell(u); st.rerun()
             
             if st.session_state.test_answered:
-                st.success(st.session_state.test_msg) if "⭕" in st.session_state.test_msg else st.error(st.session_state.test_msg)
+                
+                # 🎯 [문제의 매직 버그 해결 구간!] 정석적인 if ~ else 문으로 수정
+                if "⭕" in st.session_state.test_msg:
+                    st.success(st.session_state.test_msg)
+                else:
+                    st.error(st.session_state.test_msg)
+                    
                 play_audio(current_w)
                 if st.session_state.test_q_count < st.session_state.test_q_max - 1:
                     if st.button("다음 ➡️"): st.session_state.test_q_count += 1; prepare_question(); st.rerun()
