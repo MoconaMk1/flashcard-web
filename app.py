@@ -5,6 +5,7 @@ import io
 import random
 import base64
 import streamlit.components.v1 as components
+import time  # 🎯 시간 지연을 위한 파이썬 기본 도구 추가
 
 # 1. 브라우저 설정
 st.set_page_config(page_title="Veha's English", page_icon="📖", layout="centered")
@@ -61,6 +62,7 @@ if 'word_list' not in st.session_state:
     st.session_state.test_answered = False
     st.session_state.test_options = []
     st.session_state.test_msg = ""
+    st.session_state.auto_advance = False # 🎯 자동 넘김 신호등
     
 if 'play_audio_b64' not in st.session_state:
     st.session_state.play_audio_b64 = None
@@ -73,6 +75,7 @@ def play_audio(text):
     fp.seek(0)
     st.session_state.play_audio_b64 = base64.b64encode(fp.read()).decode()
 
+# 버튼 타겟팅을 좁게 설정하여 오직 플래시카드만 거대해지도록 수정
 def render_giant_button(text, hint, color, key):
     st.markdown(f"""
     <div id="anchor-{key}"></div>
@@ -295,18 +298,19 @@ else:
                         if st.form_submit_button("확인"): submit_spell(u); st.rerun()
             
             if st.session_state.test_answered:
-                
-                # 🎯 [문제의 매직 버그 해결 구간!] 정석적인 if ~ else 문으로 수정
                 if "⭕" in st.session_state.test_msg:
                     st.success(st.session_state.test_msg)
                 else:
                     st.error(st.session_state.test_msg)
                     
                 play_audio(current_w)
+                
+                # 🎯 [자동 넘김 기능] 버튼 대신 '자동 넘김 예약'을 겁니다.
                 if st.session_state.test_q_count < st.session_state.test_q_max - 1:
-                    if st.button("다음 ➡️"): st.session_state.test_q_count += 1; prepare_question(); st.rerun()
+                    st.caption("⏳ 잠시 후 자동으로 넘어갑니다...")
+                    st.session_state.auto_advance = True
                 else:
-                    st.info(f"종료! 점수: {st.session_state.test_score}/{st.session_state.test_q_max}")
+                    st.info(f"🎉 종료! 점수: {st.session_state.test_score}/{st.session_state.test_q_max}")
                     if st.button("저장 💾"): google_db.save_stats(st.session_state.current_sheet, st.session_state.stats); st.session_state.test_active = False; st.rerun()
 
     # --- [탭 4] 현황판 ---
@@ -322,3 +326,11 @@ if st.session_state.play_audio_b64:
     html = f"""<audio autoplay="true"><source src="data:audio/mp3;base64,{st.session_state.play_audio_b64}" type="audio/mp3"></audio>"""
     components.html(html, width=0, height=0)
     st.session_state.play_audio_b64 = None
+
+# 🎯 [새로운 마법] 화면 맨 밑에서 1.5초를 기다렸다가 다음 문제로 휙! 넘어갑니다.
+if st.session_state.auto_advance:
+    st.session_state.auto_advance = False
+    time.sleep(1.5) # 1.5초 동안 사용자가 피드백과 오디오를 듣게 해줍니다.
+    st.session_state.test_q_count += 1
+    prepare_question()
+    st.rerun()
