@@ -9,14 +9,18 @@ import streamlit.components.v1 as components
 # 1. 브라우저 설정
 st.set_page_config(page_title="Veha's English", page_icon="📖", layout="centered")
 
-# 🎯 [수정] 모바일 화면 가로 스크롤 차단 및 반응형 비율 완벽 조정
+# 🎯 [수정] 모바일 화면 가로 스크롤 '절대' 차단 CSS
 st.markdown("""
     <style>
-    /* 1. 가로 스크롤(우측 빈공간 드래그) 완벽 차단 */
-    html, body, [data-testid="stAppViewContainer"], .main {
-        overflow-x: hidden !important;
+    /* 1. 앱 전체 래퍼 및 모든 요소의 가로 스크롤 완전 차단 */
+    * { box-sizing: border-box !important; }
+    html, body, .stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
         max-width: 100vw !important;
+        overflow-x: hidden !important;
     }
+    
+    /* 보이지 않는 iframe들이 공간 차지하는 것 방지 */
+    iframe { max-width: 100% !important; }
 
     /* 2. 메인 타이틀 자동 축소 */
     .main-title {
@@ -26,7 +30,7 @@ st.markdown("""
         padding-top: 1rem;
     }
     
-    /* 3. 버튼 안의 텍스트가 화면 밖으로 나가지 않게 안전하게 줄바꿈 */
+    /* 3. 버튼 텍스트가 화면 밖으로 팽창하는 것 차단 */
     .stButton>button {
         border-radius: 10px;
         margin-bottom: -5px;
@@ -34,21 +38,26 @@ st.markdown("""
         min-height: 2.8rem;
         white-space: normal !important; 
         text-align: left !important;
-        word-break: break-word; 
+        word-break: break-word !important; /* 긴 단어 강제 줄바꿈 */
+        overflow-wrap: break-word !important;
     }
 
-    /* 4. 모바일 환경에서만 작동하는 가로 배치 황금비율 */
+    /* 4. 모바일 환경 1줄 유지 및 넓이 초과 완벽 방지 */
     @media (max-width: 600px) {
         div[data-testid="stHorizontalBlock"] {
-            flex-wrap: nowrap !important; /* 두 줄 꺾임 방지 */
-            gap: 5px !important; /* 버튼 사이 간격 최소화 */
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important; 
+            gap: 5px !important;
+            width: 100% !important;
         }
-        /* 단어 버튼 칸: 유연하게 늘어나되 아이콘 공간은 남김 */
+        /* 단어 버튼 칸: flex 버그 방지를 위해 min-width: 0 추가 */
         div[data-testid="column"]:nth-of-type(1) {
-            flex: 1 1 auto !important;
-            width: calc(100% - 45px) !important;
+            flex: 1 1 0% !important;
+            width: auto !important;
+            min-width: 0 !important; 
         }
-        /* 전구 아이콘 칸: 화면이 아무리 좁아져도 딱 45px만 고정 차지 */
+        /* 전구 아이콘 칸: 고정 크기 */
         div[data-testid="column"]:nth-of-type(2) {
             flex: 0 0 45px !important;
             width: 45px !important;
@@ -56,6 +65,7 @@ st.markdown("""
         }
         .stPopover > button {
             padding: 0.2rem 0.2rem !important; 
+            width: 100% !important;
         }
     }
     </style>
@@ -114,7 +124,7 @@ def render_clickable_card(text, color, audio_text=None):
     <html>
     <head>
         <style>
-            body {{ margin: 0; padding: 0; background-color: transparent; overflow: hidden; }}
+            body {{ margin: 0; padding: 0; background-color: transparent; overflow: hidden; width: 100%; box-sizing: border-box; }}
             .card {{
                 cursor: {cursor};
                 background-color: #f0f2f6;
@@ -123,6 +133,7 @@ def render_clickable_card(text, color, audio_text=None):
                 text-align: center;
                 border: 3px solid {color};
                 height: 220px;
+                width: 100%;
                 display: flex;
                 flex-direction: column;
                 justify-content: center;
@@ -130,7 +141,7 @@ def render_clickable_card(text, color, audio_text=None):
                 box-sizing: border-box;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             }}
-            h1 {{ color: {color}; font-size: clamp(2rem, 8vw, 2.8rem); margin: 0; font-weight: bold; word-break: keep-all; }}
+            h1 {{ color: {color}; font-size: clamp(1.8rem, 7vw, 2.8rem); margin: 0; font-weight: bold; word-break: keep-all; }}
             .hint {{ color: #7f8c8d; font-size: 0.9rem; margin-top: 15px; }}
         </style>
     </head>
