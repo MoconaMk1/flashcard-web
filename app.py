@@ -9,10 +9,16 @@ import streamlit.components.v1 as components
 # 1. 브라우저 설정
 st.set_page_config(page_title="Veha's English", page_icon="📖", layout="centered")
 
-# 🎯 [수정] 모바일 화면(반응형) 완벽 대응 CSS 주입!
+# 🎯 [수정] 모바일 화면 가로 스크롤 차단 및 반응형 비율 완벽 조정
 st.markdown("""
     <style>
-    /* 1. 메인 타이틀 화면 크기에 맞춰 자동 축소 (최소 1.4rem ~ 최대 2.5rem) */
+    /* 1. 가로 스크롤(우측 빈공간 드래그) 완벽 차단 */
+    html, body, [data-testid="stAppViewContainer"], .main {
+        overflow-x: hidden !important;
+        max-width: 100vw !important;
+    }
+
+    /* 2. 메인 타이틀 자동 축소 */
     .main-title {
         font-size: clamp(1.4rem, 6vw, 2.5rem);
         font-weight: 800;
@@ -20,7 +26,7 @@ st.markdown("""
         padding-top: 1rem;
     }
     
-    /* 2. 버튼 내 텍스트 줄바꿈 허용 (글자가 길어도 밖으로 안 삐져나감) */
+    /* 3. 버튼 안의 텍스트가 화면 밖으로 나가지 않게 안전하게 줄바꿈 */
     .stButton>button {
         border-radius: 10px;
         margin-bottom: -5px;
@@ -28,23 +34,28 @@ st.markdown("""
         min-height: 2.8rem;
         white-space: normal !important; 
         text-align: left !important;
-        word-break: keep-all;
+        word-break: break-word; 
     }
 
-    /* 3. 모바일에서 메뉴가 두 줄로 꺾이는 현상(덜컹거림) 완벽 차단! */
+    /* 4. 모바일 환경에서만 작동하는 가로 배치 황금비율 */
     @media (max-width: 600px) {
         div[data-testid="stHorizontalBlock"] {
-            flex-direction: row !important;
-            flex-wrap: nowrap !important;
-            align-items: center !important;
-            gap: 0.3rem !important; /* 버튼 사이 간격 축소 */
+            flex-wrap: nowrap !important; /* 두 줄 꺾임 방지 */
+            gap: 5px !important; /* 버튼 사이 간격 최소화 */
         }
-        div[data-testid="column"] {
-            width: auto !important;
-            min-width: 0 !important;
+        /* 단어 버튼 칸: 유연하게 늘어나되 아이콘 공간은 남김 */
+        div[data-testid="column"]:nth-of-type(1) {
+            flex: 1 1 auto !important;
+            width: calc(100% - 45px) !important;
+        }
+        /* 전구 아이콘 칸: 화면이 아무리 좁아져도 딱 45px만 고정 차지 */
+        div[data-testid="column"]:nth-of-type(2) {
+            flex: 0 0 45px !important;
+            width: 45px !important;
+            min-width: 45px !important;
         }
         .stPopover > button {
-            padding: 0.2rem 0.5rem !important; /* 전구 아이콘 여백 축소 */
+            padding: 0.2rem 0.2rem !important; 
         }
     }
     </style>
@@ -103,7 +114,7 @@ def render_clickable_card(text, color, audio_text=None):
     <html>
     <head>
         <style>
-            body {{ margin: 0; padding: 0; background-color: transparent; }}
+            body {{ margin: 0; padding: 0; background-color: transparent; overflow: hidden; }}
             .card {{
                 cursor: {cursor};
                 background-color: #f0f2f6;
@@ -217,7 +228,6 @@ with st.sidebar:
 # ==========================================
 # 📱 메인 화면
 # ==========================================
-# 🎯 [수정] 반응형 HTML 타이틀 적용
 st.markdown('<div class="main-title">📖 Veha\'s English Web</div>', unsafe_allow_html=True)
 
 if not st.session_state.word_list:
@@ -239,7 +249,7 @@ else:
             mean = st.session_state.words[w]
             note = st.session_state.notes.get(w, "").strip()
             with st.container(border=True):
-                # 🎯 [수정] 단어 버튼과 전구 아이콘 비율 조정 (아이콘이 밑으로 안 떨어지도록!)
+                # 🎯 [수정] 모바일에서 절대 틀어지지 않는 비율로 설정 (CSS 연동)
                 cols = st.columns([8.5, 1.5]) 
                 if cols[0].button(f"**{w}** : {mean}", key=f"btn_w_{w}", use_container_width=True):
                     play_audio(w) 
