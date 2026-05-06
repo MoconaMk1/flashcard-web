@@ -9,6 +9,47 @@ import streamlit.components.v1 as components
 # 1. 브라우저 설정
 st.set_page_config(page_title="Veha's English", page_icon="📖", layout="centered")
 
+# 🎯 [수정] 모바일 화면(반응형) 완벽 대응 CSS 주입!
+st.markdown("""
+    <style>
+    /* 1. 메인 타이틀 화면 크기에 맞춰 자동 축소 (최소 1.4rem ~ 최대 2.5rem) */
+    .main-title {
+        font-size: clamp(1.4rem, 6vw, 2.5rem);
+        font-weight: 800;
+        margin-bottom: 1rem;
+        padding-top: 1rem;
+    }
+    
+    /* 2. 버튼 내 텍스트 줄바꿈 허용 (글자가 길어도 밖으로 안 삐져나감) */
+    .stButton>button {
+        border-radius: 10px;
+        margin-bottom: -5px;
+        height: auto !important;
+        min-height: 2.8rem;
+        white-space: normal !important; 
+        text-align: left !important;
+        word-break: keep-all;
+    }
+
+    /* 3. 모바일에서 메뉴가 두 줄로 꺾이는 현상(덜컹거림) 완벽 차단! */
+    @media (max-width: 600px) {
+        div[data-testid="stHorizontalBlock"] {
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
+            gap: 0.3rem !important; /* 버튼 사이 간격 축소 */
+        }
+        div[data-testid="column"] {
+            width: auto !important;
+            min-width: 0 !important;
+        }
+        .stPopover > button {
+            padding: 0.2rem 0.5rem !important; /* 전구 아이콘 여백 축소 */
+        }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 # 2. 앱의 기억력 세팅
 if 'word_list' not in st.session_state:
     st.session_state.words = {}
@@ -21,7 +62,6 @@ if 'word_list' not in st.session_state:
     st.session_state.current_sheet = ""
     st.session_state.stats = {}
     st.session_state.saved_sheets = ["영어"]
-    
     st.session_state.test_active = False
     st.session_state.test_type = "객관식"
     st.session_state.test_q_max = 0
@@ -35,7 +75,7 @@ if 'word_list' not in st.session_state:
 if 'play_audio_b64' not in st.session_state:
     st.session_state.play_audio_b64 = None
 
-# 🎯 [수정] 단어 목록용 오디오 준비 (화면 맨 밑에서 재생되도록 기억만 해둠)
+# 오디오 조수
 def play_audio(text):
     tts = gTTS(text=text, lang='en')
     fp = io.BytesIO()
@@ -43,7 +83,7 @@ def play_audio(text):
     fp.seek(0)
     st.session_state.play_audio_b64 = base64.b64encode(fp.read()).decode()
 
-# 🎯 [수정] 크고 예쁜 클릭형 플래시카드 조수! (자바스크립트 즉시 재생)
+# 클릭형 플래시카드 조수
 def render_clickable_card(text, color, audio_text=None):
     b64_audio = ""
     if audio_text:
@@ -79,7 +119,7 @@ def render_clickable_card(text, color, audio_text=None):
                 box-sizing: border-box;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             }}
-            h1 {{ color: {color}; font-size: 2.8rem; margin: 0; font-weight: bold; }}
+            h1 {{ color: {color}; font-size: clamp(2rem, 8vw, 2.8rem); margin: 0; font-weight: bold; word-break: keep-all; }}
             .hint {{ color: #7f8c8d; font-size: 0.9rem; margin-top: 15px; }}
         </style>
     </head>
@@ -94,7 +134,7 @@ def render_clickable_card(text, color, audio_text=None):
     """
     components.html(html, height=240)
 
-# --- 기능 조수 함수들 ---
+# --- 시험 및 통계 로직 ---
 def prepare_question():
     st.session_state.test_answered = False
     st.session_state.test_msg = ""
@@ -177,7 +217,8 @@ with st.sidebar:
 # ==========================================
 # 📱 메인 화면
 # ==========================================
-st.title("📖 Veha's English Web")
+# 🎯 [수정] 반응형 HTML 타이틀 적용
+st.markdown('<div class="main-title">📖 Veha\'s English Web</div>', unsafe_allow_html=True)
 
 if not st.session_state.word_list:
     st.info("👈 왼쪽 사이드바에서 시트를 선택하고 '데이터 불러오기'를 눌러주세요!")
@@ -198,9 +239,8 @@ else:
             mean = st.session_state.words[w]
             note = st.session_state.notes.get(w, "").strip()
             with st.container(border=True):
-                cols = st.columns([0.85, 0.15])
-                
-                # 🎯 [수정] 누르면 소리가 나되, 덜컹거리지 않도록 로직 분리
+                # 🎯 [수정] 단어 버튼과 전구 아이콘 비율 조정 (아이콘이 밑으로 안 떨어지도록!)
+                cols = st.columns([8.5, 1.5]) 
                 if cols[0].button(f"**{w}** : {mean}", key=f"btn_w_{w}", use_container_width=True):
                     play_audio(w) 
                 
@@ -229,7 +269,6 @@ else:
         front_text, front_color = (current_word, "#2980B9") if not st.session_state.show_meaning else (mean, "#D35400")
         if not is_w2m: front_text, front_color = (mean, "#2980B9") if not st.session_state.show_meaning else (current_word, "#D35400")
 
-        # 🎯 [수정] 예쁘고 크고 통통한 카드 복구! 누르면 즉시 재생됩니다.
         render_clickable_card(front_text, front_color, audio_text=current_word)
         
         if note and st.session_state.show_meaning: st.info(f"💡 {note}")
@@ -256,14 +295,11 @@ else:
             current_w = st.session_state.test_queue[st.session_state.test_q_count]
             
             if st.session_state.test_type == "객관식":
-                # 🎯 [수정] 객관식 문제도 예쁜 카드로 출력
                 render_clickable_card(current_w, "#2C3E50", audio_text=current_w)
-                
                 if not st.session_state.test_answered:
                     for opt in st.session_state.test_options:
                         if st.button(opt, use_container_width=True): submit_mcq(opt); st.rerun()
             else:
-                # 🎯 [수정] 스펠링 문제(한글)도 카드로 출력 (소리는 안 남)
                 render_clickable_card(st.session_state.words[current_w], "#2C3E50")
                 if not st.session_state.test_answered:
                     with st.form(f"f_{st.session_state.test_q_count}"):
@@ -272,10 +308,7 @@ else:
             
             if st.session_state.test_answered:
                 st.success(st.session_state.test_msg) if "⭕" in st.session_state.test_msg else st.error(st.session_state.test_msg)
-                
-                # 🎯 정답 확인 시 자동 재생
                 play_audio(current_w)
-                
                 if st.session_state.test_q_count < st.session_state.test_q_max - 1:
                     if st.button("다음 ➡️"): st.session_state.test_q_count += 1; prepare_question(); st.rerun()
                 else:
@@ -290,16 +323,8 @@ else:
                     st.write(f"**{w}** : {st.session_state.words.get(w, '')}")
                     st.caption(f"⭕ {d['correct']} | ❌ {d['wrong']}")
 
-# ==========================================
-# 🎯 [핵심] 덜컹거림 완벽 차단 로직
-# ==========================================
-# 단어 목록 등에서 버튼을 눌렀을 때 생성된 오디오를, 화면 맨~~~ 밑바닥 보이지 않는 곳에서 재생합니다!
+# 덜컹거림 방지 배경 오디오
 if st.session_state.play_audio_b64:
-    html = f"""
-    <audio autoplay="true">
-        <source src="data:audio/mp3;base64,{st.session_state.play_audio_b64}" type="audio/mp3">
-    </audio>
-    """
-    # width=0, height=0 이라서 화면에 아무런 영향을 주지 않습니다.
+    html = f"""<audio autoplay="true"><source src="data:audio/mp3;base64,{st.session_state.play_audio_b64}" type="audio/mp3"></audio>"""
     components.html(html, width=0, height=0)
     st.session_state.play_audio_b64 = None
