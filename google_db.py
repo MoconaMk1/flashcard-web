@@ -30,3 +30,10 @@ def load_words_from_sheet(sheet_name):
             notes[w] = row[2].strip()
             
     return words, notes
+
+# 🎯 새로 추가된 '단어 등록' 담당 업무
+def add_word_to_sheet(sheet_name, word, meaning, note=""):
+    client = get_google_client()
+    sh = client.open(sheet_name)
+    worksheet = sh.sheet1
+    worksheet.append_row([word, meaning, note])
