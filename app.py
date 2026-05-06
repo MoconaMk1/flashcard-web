@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 # 1. 브라우저 설정
 st.set_page_config(page_title="Veha's English", page_icon="📖", layout="centered")
 
-# 🎯 모바일 화면 가로 스크롤 완전 차단 및 잔상 제거 CSS
+# 🎯 모바일 화면 스크롤 차단 및 디자인 & 잔상 제거 CSS
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"], .main {
@@ -37,10 +37,14 @@ st.markdown("""
         color: #d35400 !important;
         background-color: #fdfae6 !important;
     }
-    /* 선택지 등이 사라질 때 흐려지는 효과(잔상)를 강제 삭제하여 즉시 증발시킴 */
+    
+    /* 요소가 사라질 때 흐려지는 잔상(Ghosting) 강제 차단 */
     .element-container, [data-testid="stElementContainer"] {
         transition: none !important;
         animation: none !important;
+    }
+    div[style*="opacity: 0"] {
+        display: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -74,15 +78,15 @@ if 'play_audio_b64' not in st.session_state:
 if 'play_audio_key' not in st.session_state:
     st.session_state.play_audio_key = "init"
 
-# 🎯 [버그 해결] 음성 무한 반복 재생 조수
+# 🎯 오디오 생성 조수
 def play_audio(text):
     tts = gTTS(text=text, lang='en')
     fp = io.BytesIO()
     tts.write_to_fp(fp)
     fp.seek(0)
     st.session_state.play_audio_b64 = base64.b64encode(fp.read()).decode()
-    # 똑같은 버튼을 눌러도 무조건 재생되도록 고유 번호(시간)를 강제로 부여!
-    st.session_state.play_audio_key = f"audio_{time.time()}"
+    # HTML 내용이 매번 바뀌도록 시간을 기록해 둡니다
+    st.session_state.play_audio_key = str(time.time())
 
 # 거대 플래시카드 버튼 조수
 def render_giant_button(text, hint, color, key):
@@ -257,7 +261,6 @@ else:
         front_text, front_color = (current_word, "#2980B9") if not st.session_state.show_meaning else (mean, "#D35400")
         if not is_w2m: front_text, front_color = (mean, "#2980B9") if not st.session_state.show_meaning else (current_word, "#D35400")
 
-        # 🎯 [수정] 카드 클릭 = 뒤집기 + 소리 동시 발동! 
         if render_giant_button(front_text, "👆 클릭하여 뒤집고 발음 듣기", front_color, "main_card_btn"):
             play_audio(current_word) 
             st.session_state.show_meaning = not st.session_state.show_meaning 
@@ -265,7 +268,7 @@ else:
         
         if note and st.session_state.show_meaning: st.info(f"💡 {note}")
         
-        # 🎯 [수정] 하단에 자리만 차지하던 발음 듣기 버튼 삭제! 깔끔하게 '다음 단어'만 남김
+        # 발음 듣기 버튼 삭제 및 다음 단어 버튼만 유지
         if st.button("➡️ 다음 단어", use_container_width=True, type="primary"):
             st.session_state.current_idx = (st.session_state.current_idx + 1) % len(st.session_state.word_list)
             st.session_state.show_meaning = False; st.rerun()
@@ -296,14 +299,13 @@ else:
                 if render_giant_button(current_w, "🔊 클릭하여 발음 듣기", "#2C3E50", "test_card_obj"):
                     play_audio(current_w)
                 
-                # 🎯 [버그 해결] 정답을 누르는 순간 선택지가 담긴 '빈 상자(st.empty)'를 완전히 파괴해버립니다!
                 mcq_box = st.empty()
                 if not st.session_state.test_answered:
                     with mcq_box.container():
                         for opt in st.session_state.test_options:
                             if st.button(opt, use_container_width=True): submit_mcq(opt); st.rerun()
                 else:
-                    mcq_box.empty() # 흔적도 없이 증발
+                    mcq_box.empty()
             else:
                 if render_giant_button(st.session_state.words[current_w], "아래에 영단어를 적어주세요", "#2C3E50", "test_card_spl"):
                     pass 
@@ -315,7 +317,7 @@ else:
                             u = st.text_input("영어 입력:"); 
                             if st.form_submit_button("확인"): submit_spell(u); st.rerun()
                 else:
-                    spl_box.empty() # 제출 즉시 폼 증발
+                    spl_box.empty()
             
             if st.session_state.test_answered:
                 if "⭕" in st.session_state.test_msg:
@@ -340,10 +342,15 @@ else:
                     st.write(f"**{w}** : {st.session_state.words.get(w, '')}")
                     st.caption(f"⭕ {d['correct']} | ❌ {d['wrong']}")
 
-# 🎯 [버그 해결] 타임스탬프 키(key)를 적용하여 클릭할 때마다 강제로 무한 반복 재생!
+# 🎯 [에러 수정 완료!] 존재하지 않는 key 파라미터를 삭제하고, div 태그 내용 변경으로 브라우저를 속입니다!
 if st.session_state.play_audio_b64:
-    html = f"""<audio autoplay="true"><source src="data:audio/mp3;base64,{st.session_state.play_audio_b64}" type="audio/mp3"></audio>"""
-    components.html(html, width=0, height=0, key=st.session_state.play_audio_key)
+    html = f"""
+    <audio autoplay="true">
+        <source src="data:audio/mp3;base64,{st.session_state.play_audio_b64}" type="audio/mp3">
+    </audio>
+    <div style='display:none;'>{st.session_state.play_audio_key}</div>
+    """
+    components.html(html, width=0, height=0)
     st.session_state.play_audio_b64 = None
 
 # 자동 넘김 딜레이
