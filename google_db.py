@@ -37,3 +37,28 @@ def add_word_to_sheet(sheet_name, word, meaning, note=""):
     sh = client.open(sheet_name)
     worksheet = sh.sheet1
     worksheet.append_row([word, meaning, note])
+
+# 🎯 새로 추가된 '단어 수정' 담당 업무
+def edit_word_in_sheet(sheet_name, old_word, new_word, new_mean, new_note=""):
+    client = get_google_client()
+    worksheet = client.open(sheet_name).sheet1
+    try:
+        # 기존 단어가 몇 번째 줄에 있는지 찾기
+        cell = worksheet.find(old_word, in_column=1)
+        if cell:
+            # 찾은 줄의 A~C열 데이터를 새 내용으로 덮어쓰기
+            worksheet.update(f'A{cell.row}:C{cell.row}', [[new_word, new_mean, new_note]])
+    except Exception as e:
+        pass
+
+# 🎯 새로 추가된 '단어 삭제' 담당 업무
+def delete_word_from_sheet(sheet_name, word):
+    client = get_google_client()
+    worksheet = client.open(sheet_name).sheet1
+    try:
+        cell = worksheet.find(word, in_column=1)
+        if cell:
+            # 찾은 줄을 통째로 삭제
+            worksheet.delete_rows(cell.row)
+    except Exception as e:
+        pass
