@@ -49,7 +49,7 @@ if 'word_list' not in st.session_state:
     st.session_state.is_admin = False
     st.session_state.current_sheet = ""
     st.session_state.stats = {}
-    st.session_state.saved_sheets = ["영어"]
+    st.session_state.saved_sheets = ["맛있는 초등 필수 영단어 01-02"]
     st.session_state.card_direction = "단어 ➔ 뜻" 
     
     st.session_state.test_active = False
