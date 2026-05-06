@@ -50,8 +50,6 @@ if 'word_list' not in st.session_state:
     st.session_state.current_sheet = ""
     st.session_state.stats = {}
     st.session_state.saved_sheets = ["영어"]
-    
-    # 🎯 방향 설정을 영구 기억력에 등록!
     st.session_state.card_direction = "단어 ➔ 뜻" 
     
     st.session_state.test_active = False
@@ -75,12 +73,13 @@ def play_audio(text):
     fp.seek(0)
     st.session_state.play_audio_b64 = base64.b64encode(fp.read()).decode()
 
-# 🎯 [수정] 순수 파이썬 코드로 작동하는 거대 플래시카드 버튼 조수!
+# 🎯 [버그 해결] 타겟팅을 아주 좁게 설정하여, 오직 플래시카드만 거대해지고 다른 버튼들은 멀쩡하도록 수정!
 def render_giant_button(text, hint, color, key):
     st.markdown(f"""
     <div id="anchor-{key}"></div>
     <style>
-    div:has(#anchor-{key}) + div button {{
+    div[data-testid="element-container"]:has(#anchor-{key}) + div[data-testid="element-container"] button,
+    div.element-container:has(#anchor-{key}) + div.element-container button {{
         height: 220px !important;
         border: 3px solid {color} !important;
         border-radius: 15px !important;
@@ -92,10 +91,12 @@ def render_giant_button(text, hint, color, key):
         box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important;
         transition: transform 0.1s ease !important;
     }}
-    div:has(#anchor-{key}) + div button:active {{
+    div[data-testid="element-container"]:has(#anchor-{key}) + div[data-testid="element-container"] button:active,
+    div.element-container:has(#anchor-{key}) + div.element-container button:active {{
         transform: scale(0.97) !important;
     }}
-    div:has(#anchor-{key}) + div button p:nth-of-type(1) {{
+    div[data-testid="element-container"]:has(#anchor-{key}) + div[data-testid="element-container"] button p:nth-of-type(1),
+    div.element-container:has(#anchor-{key}) + div.element-container button p:nth-of-type(1) {{
         font-size: clamp(2rem, 8vw, 2.8rem) !important;
         font-weight: bold !important;
         color: {color} !important;
@@ -103,7 +104,8 @@ def render_giant_button(text, hint, color, key):
         text-align: center !important;
         width: 100% !important;
     }}
-    div:has(#anchor-{key}) + div button p:nth-of-type(2) {{
+    div[data-testid="element-container"]:has(#anchor-{key}) + div[data-testid="element-container"] button p:nth-of-type(2),
+    div.element-container:has(#anchor-{key}) + div.element-container button p:nth-of-type(2) {{
         font-size: 0.9rem !important;
         color: #7f8c8d !important;
         margin-top: 15px !important;
@@ -112,7 +114,6 @@ def render_giant_button(text, hint, color, key):
     }}
     </style>
     """, unsafe_allow_html=True)
-    # 버튼을 렌더링하고, 클릭 여부를 반환합니다.
     return st.button(f"{text}\n\n{hint}", key=key, use_container_width=True)
 
 # --- 시험 및 통계 로직 ---
@@ -181,14 +182,12 @@ with st.sidebar:
                     st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
                     st.session_state.word_list = list(w.keys())
                     st.session_state.current_idx, st.session_state.current_sheet = 0, selected_sheets[0]
-                    st.session_state.test_active = False
+                    st.session_state.test_active = False # 로드 시 시험 초기화
                     st.success(f"총 {len(w)}개의 단어 로드 완료!")
                 except: st.error("시트 로드 실패!")
 
     st.divider()
     st.write("🔄 카드 방향 설정")
-    
-    # 🎯 [수정] 영구 기억력(card_direction)과 라디오 버튼을 하나로 묶어 고정시킵니다!
     st.radio("방향", ["단어 ➔ 뜻", "뜻 ➔ 단어"], key="card_direction", label_visibility="collapsed")
 
     st.divider()
@@ -242,21 +241,17 @@ else:
         current_word = st.session_state.word_list[st.session_state.current_idx]
         mean = st.session_state.words[current_word]
         note = st.session_state.notes.get(current_word, "")
-        
-        # 🎯 고정된 방향 설정을 가져와서 적용
         is_w2m = (st.session_state.card_direction == "단어 ➔ 뜻")
         
         front_text, front_color = (current_word, "#2980B9") if not st.session_state.show_meaning else (mean, "#D35400")
         if not is_w2m: front_text, front_color = (mean, "#2980B9") if not st.session_state.show_meaning else (current_word, "#D35400")
 
-        # 🎯 [수정] 카드를 클릭하면 파이썬이 이를 알아채고 뒤집습니다!
         if render_giant_button(front_text, "👆 클릭하여 뒤집기", front_color, "main_card_btn"):
             st.session_state.show_meaning = not st.session_state.show_meaning
             st.rerun()
         
         if note and st.session_state.show_meaning: st.info(f"💡 {note}")
         
-        # 🎯 [수정] 카드가 뒤집기 기능을 하므로, 하단 버튼을 '발음 듣기'와 '다음 단어'로 깔끔하게 변경
         col1, col2 = st.columns(2)
         if col1.button("🔊 발음 듣기", use_container_width=True):
             play_audio(current_word)
@@ -267,6 +262,7 @@ else:
     # --- [탭 3] 시험 모드 ---
     with tab_test:
         if not st.session_state.test_active:
+            # 🎯 시작 화면
             test_type = st.selectbox("시험 방식", ["객관식", "스펠링"])
             q_count = st.number_input("문제 수", min_value=1, value=min(10, len(st.session_state.word_list)))
             if st.button("🚀 시작", type="primary", use_container_width=True):
@@ -275,7 +271,17 @@ else:
                 pool = list(st.session_state.word_list); random.shuffle(pool); st.session_state.test_queue = pool[:q_count]
                 prepare_question(); st.rerun()
         else:
-            st.progress(st.session_state.test_q_count / st.session_state.test_q_max)
+            # 🎯 진행 화면
+            col_prog, col_stop = st.columns([7, 3])
+            with col_prog:
+                st.progress(st.session_state.test_q_count / st.session_state.test_q_max)
+                st.caption(f"문제: {st.session_state.test_q_count + 1} / {st.session_state.test_q_max} (현재 점수: {st.session_state.test_score})")
+            
+            # 🎯 [버그 해결] 도중에 언제든 시험을 취소하고 시작 화면으로 돌아가는 버튼 추가
+            with col_stop:
+                if st.button("⏹️ 시험 중단", use_container_width=True):
+                    st.session_state.test_active = False; st.rerun()
+            
             current_w = st.session_state.test_queue[st.session_state.test_q_count]
             
             if st.session_state.test_type == "객관식":
@@ -286,7 +292,7 @@ else:
                         if st.button(opt, use_container_width=True): submit_mcq(opt); st.rerun()
             else:
                 if render_giant_button(st.session_state.words[current_w], "아래에 영단어를 적어주세요", "#2C3E50", "test_card_spl"):
-                    pass # 한글 뜻이므로 소리는 나지 않음
+                    pass 
                 if not st.session_state.test_answered:
                     with st.form(f"f_{st.session_state.test_q_count}"):
                         u = st.text_input("영어 입력:"); 
