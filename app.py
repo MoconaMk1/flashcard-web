@@ -9,18 +9,14 @@ import streamlit.components.v1 as components
 # 1. 브라우저 설정
 st.set_page_config(page_title="Veha's English", page_icon="📖", layout="centered")
 
-# 🎯 [수정] 모바일 화면 가로 스크롤 '절대' 차단 CSS
+# 🎯 [수정] 복잡한 가로 분할 CSS를 모두 제거하고, 가장 안정적인 세팅만 남겼습니다.
 st.markdown("""
     <style>
-    /* 1. 앱 전체 래퍼 및 모든 요소의 가로 스크롤 완전 차단 */
-    * { box-sizing: border-box !important; }
-    html, body, .stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-        max-width: 100vw !important;
+    /* 1. 가로 스크롤 원천 차단 (보험용) */
+    html, body, [data-testid="stAppViewContainer"], .main {
         overflow-x: hidden !important;
+        max-width: 100vw !important;
     }
-    
-    /* 보이지 않는 iframe들이 공간 차지하는 것 방지 */
-    iframe { max-width: 100% !important; }
 
     /* 2. 메인 타이틀 자동 축소 */
     .main-title {
@@ -30,43 +26,22 @@ st.markdown("""
         padding-top: 1rem;
     }
     
-    /* 3. 버튼 텍스트가 화면 밖으로 팽창하는 것 차단 */
+    /* 3. 버튼 텍스트 줄바꿈 및 좌측 정렬 */
     .stButton>button {
         border-radius: 10px;
-        margin-bottom: -5px;
-        height: auto !important;
         min-height: 2.8rem;
+        height: auto !important;
         white-space: normal !important; 
         text-align: left !important;
-        word-break: break-word !important; /* 긴 단어 강제 줄바꿈 */
-        overflow-wrap: break-word !important;
+        word-break: break-word !important; 
     }
-
-    /* 4. 모바일 환경 1줄 유지 및 넓이 초과 완벽 방지 */
-    @media (max-width: 600px) {
-        div[data-testid="stHorizontalBlock"] {
-            display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: nowrap !important; 
-            gap: 5px !important;
-            width: 100% !important;
-        }
-        /* 단어 버튼 칸: flex 버그 방지를 위해 min-width: 0 추가 */
-        div[data-testid="column"]:nth-of-type(1) {
-            flex: 1 1 0% !important;
-            width: auto !important;
-            min-width: 0 !important; 
-        }
-        /* 전구 아이콘 칸: 고정 크기 */
-        div[data-testid="column"]:nth-of-type(2) {
-            flex: 0 0 45px !important;
-            width: 45px !important;
-            min-width: 45px !important;
-        }
-        .stPopover > button {
-            padding: 0.2rem 0.2rem !important; 
-            width: 100% !important;
-        }
+    
+    /* 4. 포스트잇(popover) 버튼 디자인을 단어 버튼과 어울리게 수정 */
+    .stPopover > button {
+        border-radius: 10px !important;
+        border: 1px dashed #f39c12 !important;
+        color: #d35400 !important;
+        background-color: #fdfae6 !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -260,14 +235,16 @@ else:
             mean = st.session_state.words[w]
             note = st.session_state.notes.get(w, "").strip()
             with st.container(border=True):
-                # 🎯 [수정] 모바일에서 절대 틀어지지 않는 비율로 설정 (CSS 연동)
-                cols = st.columns([8.5, 1.5]) 
-                if cols[0].button(f"**{w}** : {mean}", key=f"btn_w_{w}", use_container_width=True):
-                    play_audio(w) 
                 
-                with cols[1]:
-                    if note:
-                        with st.popover("💡"): st.info(note)
+                # 🎯 [수정] 오류의 주범이었던 가로 배치(st.columns)를 완전히 삭제!
+                # 회원님 아이디어대로 노트가 있으면 단어 버튼 '위'에 가로 100% 크기로 예쁘게 얹어줍니다.
+                if note:
+                    with st.popover("💡 부가설명 보기", use_container_width=True): 
+                        st.info(note)
+                
+                # 단어 버튼 (가로 100%)
+                if st.button(f"**{w}** : {mean}", key=f"btn_w_{w}", use_container_width=True):
+                    play_audio(w) 
                 
                 if st.session_state.is_admin:
                     with st.expander("⚙️ 수정/삭제"):
