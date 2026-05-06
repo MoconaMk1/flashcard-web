@@ -4,13 +4,13 @@ from gtts import gTTS
 import io
 import random
 import base64
+import time
 import streamlit.components.v1 as components
-import time  # 🎯 시간 지연을 위한 파이썬 기본 도구 추가
 
 # 1. 브라우저 설정
 st.set_page_config(page_title="Veha's English", page_icon="📖", layout="centered")
 
-# 🎯 모바일 화면 가로 스크롤 완전 차단 및 기본 스타일
+# 🎯 모바일 화면 스크롤 차단 및 디자인 & 잔상 제거 CSS
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"], .main {
@@ -37,6 +37,15 @@ st.markdown("""
         color: #d35400 !important;
         background-color: #fdfae6 !important;
     }
+    
+    /* 🎯 [버그 해결] 요소가 사라질 때 흐려지는 잔상(Ghosting) 완벽 차단! 즉시 사라짐 */
+    .element-container, [data-testid="stElementContainer"] {
+        transition: none !important;
+        animation: none !important;
+    }
+    div[style*="opacity: 0"] {
+        display: none !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -62,20 +71,24 @@ if 'word_list' not in st.session_state:
     st.session_state.test_answered = False
     st.session_state.test_options = []
     st.session_state.test_msg = ""
-    st.session_state.auto_advance = False # 🎯 자동 넘김 신호등
+    st.session_state.auto_advance = False 
     
 if 'play_audio_b64' not in st.session_state:
     st.session_state.play_audio_b64 = None
+if 'play_audio_key' not in st.session_state:
+    st.session_state.play_audio_key = ""
 
-# 오디오 조수
+# 🎯 [버그 해결] 음성 무한 반복 재생 조수
 def play_audio(text):
     tts = gTTS(text=text, lang='en')
     fp = io.BytesIO()
     tts.write_to_fp(fp)
     fp.seek(0)
     st.session_state.play_audio_b64 = base64.b64encode(fp.read()).decode()
+    # 똑같은 단어를 눌러도 브라우저가 매번 새것으로 인식하도록 고유 번호(시간) 부여!
+    st.session_state.play_audio_key = str(time.time())
 
-# 버튼 타겟팅을 좁게 설정하여 오직 플래시카드만 거대해지도록 수정
+# 거대 플래시카드 버튼 조수
 def render_giant_button(text, hint, color, key):
     st.markdown(f"""
     <div id="anchor-{key}"></div>
@@ -224,6 +237,7 @@ else:
                 if note:
                     with st.popover("💡 부가설명 보기", use_container_width=True): st.info(note)
                 
+                # 단어 누를 때마다 무조건 소리 재생 (타임스탬프 적용 완료)
                 if st.button(f"**{w}** : {mean}", key=f"btn_w_{w}", use_container_width=True):
                     play_audio(w) 
                 
@@ -248,14 +262,16 @@ else:
         front_text, front_color = (current_word, "#2980B9") if not st.session_state.show_meaning else (mean, "#D35400")
         if not is_w2m: front_text, front_color = (mean, "#2980B9") if not st.session_state.show_meaning else (current_word, "#D35400")
 
-        if render_giant_button(front_text, "👆 클릭하여 뒤집기", front_color, "main_card_btn"):
-            st.session_state.show_meaning = not st.session_state.show_meaning
+        # 🎯 [업그레이드] 카드 클릭 = 소리 듣기 + 뜻 뒤집기 동시 발동!
+        if render_giant_button(front_text, "👆 클릭하여 뒤집고 발음 듣기", front_color, "main_card_btn"):
+            play_audio(current_word) # 소리 재생 명령!
+            st.session_state.show_meaning = not st.session_state.show_meaning # 뒤집기 명령!
             st.rerun()
         
         if note and st.session_state.show_meaning: st.info(f"💡 {note}")
         
         col1, col2 = st.columns(2)
-        if col1.button("🔊 발음 듣기", use_container_width=True):
+        if col1.button("🔊 발음만 다시 듣기", use_container_width=True):
             play_audio(current_word)
         if col2.button("➡️ 다음 단어", use_container_width=True, type="primary"):
             st.session_state.current_idx = (st.session_state.current_idx + 1) % len(st.session_state.word_list)
@@ -286,6 +302,8 @@ else:
             if st.session_state.test_type == "객관식":
                 if render_giant_button(current_w, "🔊 클릭하여 발음 듣기", "#2C3E50", "test_card_obj"):
                     play_audio(current_w)
+                
+                # 🎯 [버그 해결] 정답을 고르면 아래쪽 버튼 4개(옵션)는 화면에서 흔적도 없이 즉시 멸종됩니다!
                 if not st.session_state.test_answered:
                     for opt in st.session_state.test_options:
                         if st.button(opt, use_container_width=True): submit_mcq(opt); st.rerun()
@@ -305,7 +323,6 @@ else:
                     
                 play_audio(current_w)
                 
-                # 🎯 [자동 넘김 기능] 버튼 대신 '자동 넘김 예약'을 겁니다.
                 if st.session_state.test_q_count < st.session_state.test_q_max - 1:
                     st.caption("⏳ 잠시 후 자동으로 넘어갑니다...")
                     st.session_state.auto_advance = True
@@ -321,16 +338,21 @@ else:
                     st.write(f"**{w}** : {st.session_state.words.get(w, '')}")
                     st.caption(f"⭕ {d['correct']} | ❌ {d['wrong']}")
 
-# 덜컹거림 방지 배경 오디오
+# 🎯 덜컹거림 방지 배경 오디오 (무한 반복 가능하도록 고유키 적용!)
 if st.session_state.play_audio_b64:
-    html = f"""<audio autoplay="true"><source src="data:audio/mp3;base64,{st.session_state.play_audio_b64}" type="audio/mp3"></audio>"""
+    html = f"""
+    <audio autoplay="true">
+        <source src="data:audio/mp3;base64,{st.session_state.play_audio_b64}" type="audio/mp3">
+    </audio>
+    <div style='display:none;'>{st.session_state.play_audio_key}</div>
+    """
     components.html(html, width=0, height=0)
     st.session_state.play_audio_b64 = None
 
-# 🎯 [새로운 마법] 화면 맨 밑에서 1.5초를 기다렸다가 다음 문제로 휙! 넘어갑니다.
+# 자동 넘김 딜레이 (스크립트 최하단에서 실행)
 if st.session_state.auto_advance:
     st.session_state.auto_advance = False
-    time.sleep(1.5) # 1.5초 동안 사용자가 피드백과 오디오를 듣게 해줍니다.
+    time.sleep(1.5) 
     st.session_state.test_q_count += 1
     prepare_question()
     st.rerun()
