@@ -70,7 +70,7 @@ if 'word_list' not in st.session_state:
     st.session_state.test_options = []
     st.session_state.test_msg = ""
     st.session_state.auto_advance = False 
-    st.session_state.test_finished = False # 🎯 시험 종료 상태 추가
+    st.session_state.test_finished = False
     
 if 'play_audio_b64' not in st.session_state:
     st.session_state.play_audio_b64 = None
@@ -92,16 +92,47 @@ def render_audio_player():
         components.html(html, width=0, height=0)
         st.session_state.play_audio_b64 = None
 
+# 🎯 [버그 해결] 최신 Streamlit 컨테이너 이름(stElementContainer)으로 정확하게 타겟팅하여 카드 크기 복구!
 def render_giant_button(text, hint, color, key):
-    st.markdown(f"""<div id="anchor-{key}"></div><style>
-    div[data-testid="element-container"]:has(#anchor-{key}) + div[data-testid="element-container"] button {{
-        height: 220px !important; border: 3px solid {color} !important; border-radius: 15px !important;
-        background-color: #f0f2f6 !important; display: flex !important; flex-direction: column !important;
-        justify-content: center !important; align-items: center !important; box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important;
+    st.markdown(f"""
+    <div id="anchor-{key}"></div>
+    <style>
+    [data-testid="stElementContainer"]:has(#anchor-{key}) + [data-testid="stElementContainer"] button,
+    .element-container:has(#anchor-{key}) + .element-container button {{
+        height: 220px !important;
+        border: 3px solid {color} !important;
+        border-radius: 15px !important;
+        background-color: #f0f2f6 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: center !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important;
+        transition: transform 0.1s ease !important;
     }}
-    div[data-testid="element-container"]:has(#anchor-{key}) + div[data-testid="element-container"] button p:nth-of-type(1) {{
-        font-size: clamp(2rem, 8vw, 2.8rem) !important; font-weight: bold !important; color: {color} !important;
-    }}</style>""", unsafe_allow_html=True)
+    [data-testid="stElementContainer"]:has(#anchor-{key}) + [data-testid="stElementContainer"] button:active,
+    .element-container:has(#anchor-{key}) + .element-container button:active {{
+        transform: scale(0.97) !important;
+    }}
+    [data-testid="stElementContainer"]:has(#anchor-{key}) + [data-testid="stElementContainer"] button p:nth-of-type(1),
+    .element-container:has(#anchor-{key}) + .element-container button p:nth-of-type(1) {{
+        font-size: clamp(2rem, 8vw, 2.8rem) !important;
+        font-weight: bold !important;
+        color: {color} !important;
+        margin: 0 !important;
+        text-align: center !important;
+        width: 100% !important;
+    }}
+    [data-testid="stElementContainer"]:has(#anchor-{key}) + [data-testid="stElementContainer"] button p:nth-of-type(2),
+    .element-container:has(#anchor-{key}) + .element-container button p:nth-of-type(2) {{
+        font-size: 0.9rem !important;
+        color: #7f8c8d !important;
+        margin-top: 15px !important;
+        text-align: center !important;
+        width: 100% !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
     return st.button(f"{text}\n\n{hint}", key=key, use_container_width=True)
 
 def prepare_question():
@@ -201,8 +232,10 @@ def tab_study_ui():
     is_w2m = (st.session_state.card_direction == "단어 ➔ 뜻")
     front_text, front_color = (current_word, "#2980B9") if not st.session_state.show_meaning else (mean, "#D35400")
     if not is_w2m: front_text, front_color = (mean, "#2980B9") if not st.session_state.show_meaning else (current_word, "#D35400")
+    
     if render_giant_button(front_text, "👆 클릭하여 뒤집기", front_color, "m_card"):
         play_audio(current_word); st.session_state.show_meaning = not st.session_state.show_meaning; st.rerun()
+    
     if note and st.session_state.show_meaning: st.info(f"💡 {note}")
     if st.button("➡️ 다음 단어", use_container_width=True, type="primary"):
         st.session_state.current_idx = (st.session_state.current_idx + 1) % len(st.session_state.word_list)
@@ -221,14 +254,12 @@ def tab_test_ui():
             pool = list(st.session_state.word_list); random.shuffle(pool); st.session_state.test_queue = pool[:q_count]
             prepare_question(); st.rerun()
     elif st.session_state.test_finished:
-        # 🎯 시험 종료 화면 (여기서 자동 저장 처리)
         st.balloons()
         st.success(f"🎉 시험 종료! 최종 점수: {st.session_state.test_score} / {st.session_state.test_q_max}")
         if st.button("처음으로 돌아가기", use_container_width=True):
             st.session_state.test_active = False
             st.rerun()
     else:
-        # 진행 화면
         cp, cs = st.columns([7, 3])
         cp.progress(st.session_state.test_q_count / st.session_state.test_q_max)
         if cs.button("⏹️ 중단", use_container_width=True): st.session_state.test_active = False; st.rerun()
@@ -260,7 +291,6 @@ def tab_test_ui():
             if st.session_state.test_q_count < st.session_state.test_q_max - 1:
                 st.session_state.auto_advance = True
             else:
-                # 🎯 마지막 문제 정답 확인 후 바로 자동 저장 트리거
                 with st.spinner("결과 자동 저장 중..."):
                     google_db.save_stats(st.session_state.current_sheet, st.session_state.stats)
                 time.sleep(1.5)
