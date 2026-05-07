@@ -43,7 +43,7 @@ def save_user_sheets(username, sheet_list):
                 row_idx = i + 1
                 break
         if row_idx != -1:
-            ws.delete_row(row_idx) 
+            ws.delete_rows(row_idx) # 🎯 오타 수정: delete_row -> delete_rows
         ws.append_row([username] + sheet_list) 
         return True
     except Exception as e: 
@@ -57,10 +57,8 @@ def get_settings_sheet():
     try:
         sh = client.open(config_name)
         try:
-            # '설정' 탭이 있는지 확인합니다.
             worksheet = sh.worksheet("설정")
         except gspread.exceptions.WorksheetNotFound:
-            # 없으면 파이썬이 알아서 '설정' 탭을 만듭니다!
             worksheet = sh.add_worksheet(title="설정", rows="1000", cols="3")
             worksheet.append_row(["사용자", "학습범위", "카드방향"])
         return worksheet
@@ -71,14 +69,12 @@ def load_user_settings(username):
     try:
         ws = get_settings_sheet()
         records = ws.get_all_values()
-        # 1번째 줄(제목줄)은 제외하고 찾습니다.
         for row in records[1:]:
             if row and row[0] == username:
                 if len(row) >= 3:
                     return row[1], row[2]
     except Exception:
         pass
-    # 기록이 없으면 기본값을 반환합니다.
     return "전체 단어 (오답 우선)", "단어 ➔ 뜻"
 
 def save_user_settings(username, study_target, card_direction):
@@ -92,7 +88,7 @@ def save_user_settings(username, study_target, card_direction):
                 break
         
         if row_idx != -1:
-            ws.delete_row(row_idx)
+            ws.delete_rows(row_idx) # 🎯 오타 수정: delete_row -> delete_rows
             
         ws.append_row([username, study_target, card_direction])
         return True
