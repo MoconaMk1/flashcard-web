@@ -117,7 +117,7 @@ if 'play_audio_b64' not in st.session_state:
 if 'play_audio_key' not in st.session_state:
     st.session_state.play_audio_key = "init"
 
-# 🎯 [수정됨] 다중 노트북용 딕셔너리 세팅
+# 다중 노트북용 딕셔너리 세팅
 if 'notebooks' not in st.session_state:
     st.session_state.notebooks = {}
 if 'current_notebook_page' not in st.session_state:
@@ -221,7 +221,6 @@ if not st.session_state.username:
                     st.session_state.study_target = target
                     st.session_state.card_direction = direction
                     
-                    # 🎯 다중 노트북 딕셔너리 로드
                     st.session_state.notebooks = google_db.load_user_notebooks(username)
                     
                     st.rerun() 
@@ -434,12 +433,11 @@ def tab_test_ui():
         st.session_state.auto_advance = False
         time.sleep(1.5); st.session_state.test_q_count += 1; prepare_question(); st.rerun()
 
-# 🎯 [신규] 다중 페이지 노트북 UI
+# 🎯 다중 페이지 노트북 UI
 @st.fragment
 def tab_notebook_ui():
     st.header("📓 나만의 다중 영어 노트")
     
-    # 1. 페이지 목록 체크 및 초기화
     page_titles = list(st.session_state.notebooks.keys())
     if not page_titles:
         st.session_state.notebooks["기본 노트"] = ""
@@ -448,22 +446,45 @@ def tab_notebook_ui():
     elif st.session_state.current_notebook_page not in page_titles:
         st.session_state.current_notebook_page = page_titles[0]
         
-    # 2. 페이지 전환 및 관리 패널
     c1, c2 = st.columns([7, 3])
     with c1:
-        # 가로형 라디오 버튼으로 깔끔한 탭 전환 효과!
         selected_page = st.radio("📑 열람할 노트 선택", page_titles, horizontal=True, label_visibility="collapsed")
         st.session_state.current_notebook_page = selected_page
         
     with c2:
         with st.popover("⚙️ 페이지 관리", use_container_width=True):
+            # 1. 새 페이지 추가
             new_title = st.text_input("새 페이지 이름", placeholder="예: 헷갈리는 숙어")
             if st.button("➕ 추가", use_container_width=True):
                 if new_title and new_title not in st.session_state.notebooks:
                     st.session_state.notebooks[new_title] = ""
                     st.session_state.current_notebook_page = new_title
                     st.rerun()
+            
             st.divider()
+            
+            # 🎯 2. [신규] 현재 페이지 이름 변경
+            rename_title = st.text_input("현재 페이지 이름 변경", value=st.session_state.current_notebook_page)
+            if st.button("✏️ 이름 변경", use_container_width=True):
+                if rename_title and rename_title != st.session_state.current_notebook_page and rename_title not in st.session_state.notebooks:
+                    old_title = st.session_state.current_notebook_page
+                    res = google_db.rename_user_notebook_page(st.session_state.username, old_title, rename_title)
+                    if res is True:
+                        # 딕셔너리 정보 업데이트
+                        content = st.session_state.notebooks.pop(old_title)
+                        st.session_state.notebooks[rename_title] = content
+                        st.session_state.current_notebook_page = rename_title
+                        st.success("이름 변경 완료!")
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.error(f"변경 실패: {res}")
+                elif rename_title in st.session_state.notebooks and rename_title != st.session_state.current_notebook_page:
+                    st.warning("이미 사용 중인 이름입니다.")
+
+            st.divider()
+            
+            # 3. 현재 페이지 삭제
             if st.button("🗑️ 현재 페이지 삭제", type="primary", use_container_width=True):
                 if len(st.session_state.notebooks) > 1:
                     del_title = st.session_state.current_notebook_page
@@ -479,7 +500,6 @@ def tab_notebook_ui():
                 else:
                     st.warning("최소 1개의 페이지는 남겨두어야 합니다.")
 
-    # 3. 현재 선택된 페이지 에디터 및 출력
     current_content = st.session_state.notebooks[st.session_state.current_notebook_page]
     
     with st.expander(f"✍️ [{st.session_state.current_notebook_page}] 내용 쓰기", expanded=not current_content):
@@ -499,7 +519,6 @@ def tab_notebook_ui():
     if current_content:
         st.markdown("---")
         st.subheader(f"🏷️ {st.session_state.current_notebook_page}")
-        # 엔터를 마크다운 줄바꿈 규칙으로 자동 변환해주는 핵심 코드!
         display_content = current_content.replace('\n', '  \n')
         st.markdown(display_content)
     else:
