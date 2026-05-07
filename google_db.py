@@ -12,14 +12,13 @@ def get_gspread_client():
 client = get_gspread_client()
 
 # ==========================================
-# 🎯 [신규] 영구 설정(시트 목록 및 순서) 저장소
+# 🎯 영구 설정(시트 목록 및 순서) 저장소
 # ==========================================
 def get_config_sheet():
     config_name = "VEHA_FLASHCARD_CONFIG"
     try:
         sh = client.open(config_name)
     except gspread.exceptions.SpreadsheetNotFound:
-        # 봇이 스스로 숨겨진 마스터 설정 파일을 만듭니다.
         sh = client.create(config_name)
     return sh.sheet1
 
@@ -29,7 +28,7 @@ def load_user_sheets(username):
         records = ws.get_all_values()
         for row in records:
             if row and row[0] == username:
-                return row[1:] # 0번째(이름)을 제외한 나머지 시트 목록 반환
+                return row[1:] 
     except: pass
     return []
 
@@ -42,11 +41,9 @@ def save_user_sheets(username, sheet_list):
             if row and row[0] == username:
                 row_idx = i + 1
                 break
-        
         if row_idx != -1:
-            ws.delete_rows(row_idx) # 기존 기록 삭제
-            
-        ws.append_row([username] + sheet_list) # 새 순서대로 덮어쓰기
+            ws.delete_rows(row_idx) 
+        ws.append_row([username] + sheet_list)
         return True
     except: return False
 
@@ -68,7 +65,6 @@ def load_multiple_sheets(sheet_names, username):
     combined_notes = {}
     combined_stats = {}
     error_msg = ""
-    
     for sheet_name in sheet_names:
         try:
             sh = client.open(sheet_name.strip())
@@ -82,7 +78,6 @@ def load_multiple_sheets(sheet_names, username):
             except gspread.exceptions.WorksheetNotFound:
                 error_msg = f"'{sheet_name}' 파일 안에 '단어장' 탭이 없습니다."
                 continue
-
             try:
                 tab_title = f"통계_{username}"
                 s_sheet = sh.worksheet(tab_title)
@@ -96,12 +91,10 @@ def load_multiple_sheets(sheet_names, username):
                         nr = row[4] if len(row) > 4 else ""
                         combined_stats[w] = {"correct": c, "wrong": w_cnt, "level": lv, "next_review": nr}
             except gspread.exceptions.WorksheetNotFound: pass
-                
         except gspread.exceptions.SpreadsheetNotFound:
             error_msg = f"'{sheet_name}' 파일을 찾을 수 없거나 공유되지 않았습니다."
         except Exception as e:
-            error_msg = f"알 수 없는 오류 발생: {str(e)}"
-
+            error_msg = f"오류: {str(e)}"
     return combined_words, combined_notes, combined_stats, error_msg
 
 def save_stats(sheet_name, stats_dict, username):
