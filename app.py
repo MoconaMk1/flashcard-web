@@ -516,7 +516,7 @@ def tab_test_ui():
 
 @st.fragment
 def tab_notebook_ui():
-    st.header("📓 나만의 다중 영어 노트")
+    st.header("📓 영어 노트")
     
     page_titles = list(st.session_state.notebooks.keys())
     if not page_titles:
