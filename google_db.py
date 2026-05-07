@@ -12,7 +12,7 @@ def get_gspread_client():
 client = get_gspread_client()
 
 # ==========================================
-# 🎯 [수정] 회원님이 직접 만든 '시트 영구 저장소' 활용
+# 🎯 [기존] 시트 목록 영구 저장소
 # ==========================================
 def get_config_sheet():
     config_name = "시트 영구 저장소"
@@ -20,7 +20,6 @@ def get_config_sheet():
         sh = client.open(config_name)
         return sh.sheet1
     except gspread.exceptions.SpreadsheetNotFound:
-        # 이제 만들려고 시도하지 않고, 못 찾으면 바로 에러를 띄웁니다.
         raise Exception(f"'{config_name}' 파일을 찾을 수 없습니다. 봇 이메일 편집자 공유를 확인해주세요.")
 
 def load_user_sheets(username):
@@ -29,9 +28,9 @@ def load_user_sheets(username):
         records = ws.get_all_values()
         for row in records:
             if row and row[0] == username:
-                return row[1:] # 0번째(이름)을 제외한 나머지 시트 목록 반환
+                return row[1:] 
     except Exception as e: 
-        return str(e) # 에러 문자를 그대로 반환하여 화면에 띄움
+        return str(e) 
     return []
 
 def save_user_sheets(username, sheet_list):
@@ -43,13 +42,61 @@ def save_user_sheets(username, sheet_list):
             if row and row[0] == username:
                 row_idx = i + 1
                 break
-        
         if row_idx != -1:
-            ws.delete_rows(row_idx) # 기존 기록 깔끔하게 삭제
-            
-        ws.append_row([username] + sheet_list) # 새 순서대로 덮어쓰기
+            ws.delete_row(row_idx) 
+        ws.append_row([username] + sheet_list) 
         return True
     except Exception as e: 
+        return str(e)
+
+# ==========================================
+# 🎯 [신규] 학습 범위 & 카드 방향 설정 저장소
+# ==========================================
+def get_settings_sheet():
+    config_name = "시트 영구 저장소"
+    try:
+        sh = client.open(config_name)
+        try:
+            # '설정' 탭이 있는지 확인합니다.
+            worksheet = sh.worksheet("설정")
+        except gspread.exceptions.WorksheetNotFound:
+            # 없으면 파이썬이 알아서 '설정' 탭을 만듭니다!
+            worksheet = sh.add_worksheet(title="설정", rows="1000", cols="3")
+            worksheet.append_row(["사용자", "학습범위", "카드방향"])
+        return worksheet
+    except gspread.exceptions.SpreadsheetNotFound:
+        raise Exception(f"'{config_name}' 파일을 찾을 수 없습니다.")
+
+def load_user_settings(username):
+    try:
+        ws = get_settings_sheet()
+        records = ws.get_all_values()
+        # 1번째 줄(제목줄)은 제외하고 찾습니다.
+        for row in records[1:]:
+            if row and row[0] == username:
+                if len(row) >= 3:
+                    return row[1], row[2]
+    except Exception:
+        pass
+    # 기록이 없으면 기본값을 반환합니다.
+    return "전체 단어 (오답 우선)", "단어 ➔ 뜻"
+
+def save_user_settings(username, study_target, card_direction):
+    try:
+        ws = get_settings_sheet()
+        records = ws.get_all_values()
+        row_idx = -1
+        for i, row in enumerate(records):
+            if row and row[0] == username:
+                row_idx = i + 1
+                break
+        
+        if row_idx != -1:
+            ws.delete_row(row_idx)
+            
+        ws.append_row([username, study_target, card_direction])
+        return True
+    except Exception as e:
         return str(e)
 
 # ==========================================
