@@ -5,7 +5,7 @@ import io
 import random
 import base64
 import time
-from datetime import datetime, timedelta  # 🎯 시간 계산을 위한 모듈 추가
+from datetime import datetime, timedelta
 import streamlit.components.v1 as components
 
 # 1. 브라우저 설정
@@ -48,13 +48,16 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 앱의 기억력 세팅 (기억 공간 확장)
+# 2. 앱의 기억력 세팅
+if 'username' not in st.session_state:
+    st.session_state.username = None # 🎯 로그인된 사용자 이름 저장 공간
+    
 if 'word_list' not in st.session_state:
     st.session_state.words = {}
     st.session_state.notes = {}
-    st.session_state.all_words = []    # 🎯 전체 단어
-    st.session_state.due_words = []    # 🎯 오늘 복습해야 할 단어
-    st.session_state.word_list = []    # 현재 화면에 띄울 단어 목록
+    st.session_state.all_words = []
+    st.session_state.due_words = []
+    st.session_state.word_list = []
     st.session_state.current_idx = 0
     st.session_state.show_meaning = False
     st.session_state.is_admin = False
@@ -79,18 +82,39 @@ if 'play_audio_b64' not in st.session_state:
     st.session_state.play_audio_b64 = None
 if 'play_audio_key' not in st.session_state:
     st.session_state.play_audio_key = "init"
+
+# ==========================================
+# 🛑 [핵심] 로그인 화면 (로그인 안 하면 아래 코드 실행 불가!)
+# ==========================================
+if not st.session_state.username:
+    st.markdown('<div class="main-title" style="text-align:center;">📖 Veha\'s English Web</div>', unsafe_allow_html=True)
+    st.write("---")
+    st.markdown("<h3 style='text-align: center;'>👋 환영합니다!</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: gray;'>본인의 이름을 입력하고 개인 맞춤형 학습을 시작하세요.</p>", unsafe_allow_html=True)
     
-# [여기에 복사해 넣으세요: 특정 이름이 아닌 '첫 번째 시트'를 유연하게 자동 로드]
+    with st.form("login_form"):
+        user_input = st.text_input("사용자 이름 (예: 홍길동)", placeholder="이름을 입력하세요")
+        submitted = st.form_submit_button("🚀 학습 시작하기", use_container_width=True)
+        
+        if submitted:
+            if user_input.strip() == "":
+                st.error("이름을 꼭 입력해주세요!")
+            else:
+                st.session_state.username = user_input.strip()
+                st.rerun() # 이름 저장 후 앱 새로고침!
+                
+    st.stop() # 로그인을 안 했으면 파이썬이 여기서 멈춥니다!
+
+# ==========================================
+# 🎯 [핵심] 로그인 완료 시 자동 데이터 불러오기 (하드코딩 제거)
+# ==========================================
 if not st.session_state.word_list and st.session_state.saved_sheets:
     try:
-        # "영어"라는 이름 대신, 리스트의 첫 번째[0] 시트를 타겟으로 잡습니다.
-        target_sheet = st.session_state.saved_sheets[0] 
-        
-        w, n, s = google_db.load_multiple_sheets([target_sheet])
+        target_sheet = st.session_state.saved_sheets[0] # 첫 번째 시트를 자동으로 타겟팅!
+        w, n, s = google_db.load_multiple_sheets([target_sheet], st.session_state.username)
         st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
         st.session_state.all_words = list(w.keys())
         
-        # 오늘 복습 대상 필터링
         today_str = datetime.now().strftime("%Y-%m-%d")
         due = [word for word in st.session_state.all_words if not st.session_state.stats.get(word, {}).get("next_review", "") or st.session_state.stats.get(word, {}).get("next_review", "") <= today_str]
         
@@ -100,7 +124,7 @@ if not st.session_state.word_list and st.session_state.saved_sheets:
     except:
         pass
 
-# 오디오 재생 조수
+# --- 각종 조수 함수들 ---
 def play_audio(text):
     tts = gTTS(text=text, lang='en')
     fp = io.BytesIO()
@@ -130,28 +154,23 @@ def render_giant_button(text, hint, color, key):
     }}</style>""", unsafe_allow_html=True)
     return st.button(f"{text}\n\n{hint}", key=key, use_container_width=True)
 
-# 🎯 [핵심] 망각 곡선 날짜 계산기
 def calculate_next_review(level):
-    intervals = {0: 0, 1: 1, 2: 3, 3: 7, 4: 14, 5: 30} # 레벨별 복습 간격 (일)
-    days = intervals.get(level, 60) # 5레벨을 넘으면 60일 간격
+    intervals = {0: 0, 1: 1, 2: 3, 3: 7, 4: 14, 5: 30}
+    days = intervals.get(level, 60)
     next_date = datetime.now() + timedelta(days=days)
     return next_date.strftime("%Y-%m-%d")
 
-# 🎯 [핵심] 정답/오답 시 레벨 업그레이드 및 강등 로직
 def update_stat(word, is_correct):
     if word not in st.session_state.stats:
         st.session_state.stats[word] = {"correct": 0, "wrong": 0, "level": 0, "next_review": ""}
-    
     st.session_state.stats[word].setdefault("level", 0)
 
     if is_correct:
         st.session_state.stats[word]["correct"] += 1
-        st.session_state.stats[word]["level"] += 1 # 맞추면 레벨 상승!
+        st.session_state.stats[word]["level"] += 1
     else:
         st.session_state.stats[word]["wrong"] += 1
-        st.session_state.stats[word]["level"] = 0 # 틀리면 레벨 초기화!
-    
-    # 캘린더에 다음 복습일 기록
+        st.session_state.stats[word]["level"] = 0
     st.session_state.stats[word]["next_review"] = calculate_next_review(st.session_state.stats[word]["level"])
 
 def prepare_question():
@@ -160,7 +179,7 @@ def prepare_question():
     current_w = st.session_state.test_queue[st.session_state.test_q_count]
     if st.session_state.test_type == "객관식":
         correct_m = st.session_state.words[current_w]
-        pool_m = [st.session_state.words[w] for w in st.session_state.all_words if w != current_w] # 전체 풀에서 오답 추출
+        pool_m = [st.session_state.words[w] for w in st.session_state.all_words if w != current_w]
         options = random.sample(pool_m, min(3, len(pool_m))) + [correct_m]
         random.shuffle(options)
         st.session_state.test_options = options
@@ -187,8 +206,17 @@ def submit_spell(user_text):
         st.session_state.test_msg = f"❌ 틀렸습니다! (스펠링: {current_w})"
         update_stat(current_w, False)
 
-# --- 사이드바 ---
+# ==========================================
+# 📱 사이드바
+# ==========================================
 with st.sidebar:
+    # 🎯 현재 접속한 사용자 환영 인사 및 로그아웃
+    st.markdown(f"### 👤 **{st.session_state.username}**님")
+    if st.button("🚪 로그아웃", use_container_width=True):
+        st.session_state.clear() # 모든 기억을 지우고 로그아웃!
+        st.rerun()
+    st.divider()
+
     st.header("🗂️ 시트 관리")
     new_sheet_name = st.text_input("새 시트 이름 추가", placeholder="예: 토익단어")
     c1, c2 = st.columns(2)
@@ -201,24 +229,18 @@ with st.sidebar:
     st.divider()
     
     selected_sheets = st.multiselect("📂 불러올 시트 선택", options=st.session_state.saved_sheets, default=st.session_state.saved_sheets[:1])
-    if st.button("🚀 데이터 불러오기", type="primary", use_container_width=True):
+    if st.button("🚀 데이터 다시 불러오기", type="primary", use_container_width=True):
         if selected_sheets:
             with st.spinner("알고리즘 분석 및 병합 중..."):
-                w, n, s = google_db.load_multiple_sheets(selected_sheets)
+                w, n, s = google_db.load_multiple_sheets(selected_sheets, st.session_state.username)
                 st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
                 st.session_state.all_words = list(w.keys())
                 
-                # 🎯 [핵심] 오늘 복습해야 할 단어만 쏙 뽑아내기
                 today_str = datetime.now().strftime("%Y-%m-%d")
-                due = []
-                for word in st.session_state.all_words:
-                    stat = st.session_state.stats.get(word, {})
-                    nr = stat.get("next_review", "")
-                    if not nr or nr <= today_str: # 복습일이 없거나 오늘이거나 오늘보다 이전이면
-                        due.append(word)
+                due = [word for word in st.session_state.all_words if not st.session_state.stats.get(word, {}).get("next_review", "") or st.session_state.stats.get(word, {}).get("next_review", "") <= today_str]
                         
                 st.session_state.due_words = due
-                st.session_state.word_list = due if due else st.session_state.all_words # 복습할게 없으면 전체단어로 초기화
+                st.session_state.word_list = due if due else st.session_state.all_words
                 st.session_state.current_idx, st.session_state.current_sheet = 0, selected_sheets[0]
                 st.session_state.test_active = False 
                 st.success(f"로드 완료! 오늘 복습할 단어: {len(due)}개")
@@ -227,13 +249,11 @@ with st.sidebar:
     st.write("🎯 학습 범위 선택")
     study_target = st.radio("범위", ["오늘 복습 대상", "전체 단어장"], key="study_target", label_visibility="collapsed")
     
-    # 선택에 따라 화면에 뿌릴 단어 리스트 실시간 교체
     if study_target == "오늘 복습 대상":
         st.session_state.word_list = st.session_state.due_words if 'due_words' in st.session_state else []
     else:
         st.session_state.word_list = st.session_state.all_words if 'all_words' in st.session_state else []
         
-    # 리스트 교체 시 에러 방지
     if st.session_state.current_idx >= len(st.session_state.word_list) and len(st.session_state.word_list) > 0:
         st.session_state.current_idx = 0
 
@@ -246,7 +266,9 @@ with st.sidebar:
     admin_pw = st.text_input("비밀번호", type="password")
     st.session_state.is_admin = (admin_pw == st.secrets["admin_password"])
 
-# --- 메인 렌더링 ---
+# ==========================================
+# 📱 메인 화면 렌더링
+# ==========================================
 @st.fragment
 def tab_list_ui():
     if st.session_state.is_admin:
@@ -337,7 +359,8 @@ def tab_test_ui():
                 st.session_state.auto_advance = True
             else:
                 with st.spinner("알고리즘 반영 및 자동 저장 중..."):
-                    google_db.save_stats(st.session_state.current_sheet, st.session_state.stats)
+                    # 🎯 [수정] username을 함께 넘겨서 내 전용 시트에만 저장!
+                    google_db.save_stats(st.session_state.current_sheet, st.session_state.stats, st.session_state.username)
                 time.sleep(1.5)
                 st.session_state.test_finished = True
                 st.rerun()
@@ -347,11 +370,10 @@ def tab_test_ui():
         st.session_state.auto_advance = False
         time.sleep(1.5); st.session_state.test_q_count += 1; prepare_question(); st.rerun()
 
-# 메인 렌더링 시작
 st.markdown('<div class="main-title">📖 Veha\'s English Web</div>', unsafe_allow_html=True)
 
 if not st.session_state.all_words:
-    st.info("👈 왼쪽 사이드바에서 시트를 선택하고 '데이터 불러오기'를 눌러주세요!")
+    st.info("데이터를 불러오는 중입니다... (혹은 단어장이 비어있습니다)")
 elif not st.session_state.word_list:
     st.success("🎉 오늘 복습할 단어를 모두 마쳤습니다! 사이드바에서 '전체 단어장'을 선택해 예습하세요.")
 else:
@@ -363,6 +385,5 @@ else:
         if st.session_state.stats:
             for w, d in sorted(st.session_state.stats.items(), key=lambda x: x[1]['wrong'], reverse=True):
                 with st.container(border=True):
-                    # 🎯 현황판에 레벨과 다음 복습일 정보 추가 표시!
                     st.write(f"**{w}** : {st.session_state.words.get(w, '')}")
                     st.caption(f"⭕ {d.get('correct',0)} | ❌ {d.get('wrong',0)} &nbsp;&nbsp; 📈 Lv.{d.get('level',0)} &nbsp;&nbsp; 📅 복습: {d.get('next_review', '오늘')}")
