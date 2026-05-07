@@ -79,6 +79,23 @@ if 'play_audio_b64' not in st.session_state:
     st.session_state.play_audio_b64 = None
 if 'play_audio_key' not in st.session_state:
     st.session_state.play_audio_key = "init"
+    
+# [여기에 복사해 넣으세요: 앱이 처음 켜질 때 '영어' 시트 자동 로드]
+if not st.session_state.word_list and "영어" in st.session_state.saved_sheets:
+    try:
+        w, n, s = google_db.load_multiple_sheets(["영어"])
+        st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
+        st.session_state.all_words = list(w.keys())
+        
+        # 오늘 복습 대상 필터링
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        due = [word for word in st.session_state.all_words if not st.session_state.stats.get(word, {}).get("next_review", "") or st.session_state.stats.get(word, {}).get("next_review", "") <= today_str]
+        
+        st.session_state.due_words = due
+        st.session_state.word_list = due if due else st.session_state.all_words
+        st.session_state.current_sheet = "영어"
+    except:
+        pass
 
 # 오디오 재생 조수
 def play_audio(text):
