@@ -457,10 +457,14 @@ def tab_test_ui():
     elif st.session_state.test_finished:
         st.balloons(); st.success(f"🎉 시험 종료! 점수: {st.session_state.test_score}/{st.session_state.test_q_max}")
         if st.button("처음으로 돌아가기", use_container_width=True): st.session_state.test_active = False; st.rerun()
-    else:
+  else:
         cp, cs = st.columns([7, 3])
         cp.progress(st.session_state.test_q_count / st.session_state.test_q_max)
-        if cs.button("⏹️ 중단"): st.session_state.test_active = False; st.rerun()
+        if cs.button("⏹️ 중단"): 
+            # 🎯 시험을 중간에 그만둬도 지금까지 풀었던 기록은 즉시 저장!
+            with st.spinner("자동 저장 중..."):
+                google_db.save_stats(st.session_state.current_sheet, st.session_state.stats, st.session_state.username)
+            st.session_state.test_active = False; st.rerun()
         
         current_w = st.session_state.test_queue[st.session_state.test_q_count]
         if st.session_state.test_type == "객관식":
