@@ -206,7 +206,6 @@ if not st.session_state.username:
                 username = user_input.strip()
                 st.session_state.username = username
                 
-                # 1. 데이터 로드
                 loaded_sheets = google_db.load_user_sheets(username)
                 if isinstance(loaded_sheets, list):
                     if loaded_sheets:
@@ -219,7 +218,6 @@ if not st.session_state.username:
                     st.session_state.study_target = target
                     st.session_state.card_direction = direction
                     
-                    # 노트북 로드
                     st.session_state.notebook_content = google_db.load_user_notebook(username)
                     
                     st.rerun() 
@@ -432,13 +430,13 @@ def tab_test_ui():
         st.session_state.auto_advance = False
         time.sleep(1.5); st.session_state.test_q_count += 1; prepare_question(); st.rerun()
 
-# 🎯 [신규] 노트북 탭 UI 렌더링 함수
+# 🎯 노트북 UI (마크다운 엔터 무시 버그 완벽 수정!)
 @st.fragment
 def tab_notebook_ui():
     st.header("📓 나만의 비밀 영어 노트")
     
     with st.expander("✍️ 노트 수정하기", expanded=not st.session_state.notebook_content):
-        new_content = st.text_area("공부하다 궁금한 점이나 핵심 문법을 정리해 보세요. (마크다운 지원)", 
+        new_content = st.text_area("공부하다 궁금한 점이나 핵심 문법을 정리해 보세요.", 
                                    value=st.session_state.notebook_content, 
                                    height=400,
                                    help="여기에 적은 내용은 영구적으로 저장됩니다.")
@@ -454,7 +452,9 @@ def tab_notebook_ui():
     
     if st.session_state.notebook_content:
         st.markdown("---")
-        st.markdown(st.session_state.notebook_content)
+        # 🎯 핵심: 엔터 한 번(\n)을 마크다운 줄바꿈 규칙(스페이스바 2개 + \n)으로 강제 변환!
+        display_content = st.session_state.notebook_content.replace('\n', '  \n')
+        st.markdown(display_content)
     else:
         st.info("아직 작성된 내용이 없습니다. 위 에디터에서 내용을 추가해 보세요!")
 
