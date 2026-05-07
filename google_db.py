@@ -63,16 +63,16 @@ def delete_word_from_sheet(sheet_name, word):
     except Exception as e:
         pass
 
-# 🎯 새로 추가된 '학습 통계 관리' 업무
-def init_stats_sheet(sheet_name):
-    client = get_google_client()
+# 🎯 [수정] 사용자 이름을 받아서 '통계_사용자명' 탭을 찾거나 새로 만듭니다.
+def init_stats_sheet(sheet_name, username):
     sh = client.open(sheet_name)
+    tab_title = f"통계_{username}"
     try:
-        worksheet = sh.worksheet("통계")
-    except:
-        # 통계 탭이 없으면 자동으로 새로 만듭니다!
-        worksheet = sh.add_worksheet(title="통계", rows="1000", cols="3")
-        worksheet.append_row(["단어", "맞춘횟수", "틀린횟수"])
+        worksheet = sh.worksheet(tab_title)
+    except gspread.exceptions.WorksheetNotFound:
+        # 탭이 없으면 파이썬이 알아서 새로 만들어줍니다!
+        worksheet = sh.add_worksheet(title=tab_title, rows="1000", cols="5")
+        worksheet.append_row(["단어", "맞춘횟수", "틀린횟수", "레벨", "다음복습일"])
     return worksheet
 
 def load_stats(sheet_name):
@@ -84,13 +84,13 @@ def load_stats(sheet_name):
             stats[row[0]] = {"correct": int(row[1]), "wrong": int(row[2])}
     return stats
 
-def save_stats(sheet_name, stats_dict):
-    if not sheet_name:
+# 🎯 [수정] 사용자 이름을 받아서 그 사람의 탭에만 저장합니다.
+def save_stats(sheet_name, stats_dict, username):
+    if not sheet_name or not username:
         return False
     try:
-        worksheet = init_stats_sheet(sheet_name)
+        worksheet = init_stats_sheet(sheet_name, username)
         worksheet.clear() 
-        # 열(Column) 5개로 확장
         rows = [["단어", "맞춘횟수", "틀린횟수", "레벨", "다음복습일"]]
         for w, data in stats_dict.items():
             rows.append([
@@ -106,8 +106,8 @@ def save_stats(sheet_name, stats_dict):
         print(f"저장 오류: {e}")
         return False
         
-# 🎯 여러 시트의 데이터를 하나로 합쳐서 가져오는 업무
-def load_multiple_sheets(sheet_names):
+# 🎯 [수정] 사용자 이름을 받아서 그 사람의 통계만 가져옵니다.
+def load_multiple_sheets(sheet_names, username):
     combined_words = {}
     combined_notes = {}
     combined_stats = {}
@@ -123,9 +123,10 @@ def load_multiple_sheets(sheet_names):
                         combined_notes[row[0]] = row[2]
         except: pass
 
-        # 2. 통계 로드 (레벨과 다음복습일 추가)
+        # 2. 통계 로드 (통계_사용자명 탭에서 가져옴)
         try:
-            s_sheet = client.open(sheet_name).worksheet("통계")
+            tab_title = f"통계_{username}"
+            s_sheet = client.open(sheet_name).worksheet(tab_title)
             s_records = s_sheet.get_all_values()
             for row in s_records[1:]:
                 if len(row) >= 1 and row[0]:
