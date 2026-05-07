@@ -11,6 +11,7 @@ import streamlit.components.v1 as components
 # 1. 브라우저 설정
 st.set_page_config(page_title="Veha's English", page_icon="📖", layout="centered")
 
+# 🎯 UI 및 디자인 세팅
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"], .main {
@@ -79,7 +80,6 @@ st.markdown("""
 # 2. 앱의 기억력 세팅
 if 'username' not in st.session_state:
     st.session_state.username = None 
-    
 if 'word_list' not in st.session_state:
     st.session_state.words = {}
     st.session_state.notes = {}
@@ -104,54 +104,23 @@ if 'word_list' not in st.session_state:
     st.session_state.test_msg = ""
     st.session_state.auto_advance = False 
     st.session_state.test_finished = False
-    
 if 'play_audio_b64' not in st.session_state:
     st.session_state.play_audio_b64 = None
 if 'play_audio_key' not in st.session_state:
     st.session_state.play_audio_key = "init"
 
 # ==========================================
-# 🛑 로그인 화면 및 영구 데이터 로드
+# 🧠 [신규] 핵심 조수 함수 (우선순위 정렬 등)
 # ==========================================
-if not st.session_state.username:
-    st.markdown('<div class="main-title" style="text-align:center;">📖 Veha\'s English Web</div>', unsafe_allow_html=True)
-    with st.form("login_form"):
-        user_input = st.text_input("사용자 이름", placeholder="이름을 입력하세요")
-        if st.form_submit_button("🚀 학습 시작하기", use_container_width=True):
-            if user_input.strip():
-                username = user_input.strip()
-                st.session_state.username = username
-                
-                # 💡 리스트면 성공, 문자열이면 에러입니다.
-                loaded_sheets = google_db.load_user_sheets(username)
-                if isinstance(loaded_sheets, list):
-                    if loaded_sheets:
-                        st.session_state.saved_sheets = loaded_sheets
-                    else:
-                        st.session_state.saved_sheets = ["맛있는 초등 필수 영단어 01-02"]
-                        res = google_db.save_user_sheets(username, st.session_state.saved_sheets)
-                        if res is not True:
-                            st.error(f"⚠️ 설정 파일 생성 실패! 원인: {res}")
-                            st.stop()
-                    st.rerun() 
-                else:
-                    st.error(f"⚠️ 설정 로드 실패! 원인: {loaded_sheets}")
-                    st.stop()
-            else: st.error("이름을 입력해주세요!")
-    st.stop() 
+def get_sorted_words(words_to_sort, stats_dict, all_words_list):
+    """틀린 단어를 무조건 0순위로 맨 앞에 세우고, 나머지는 원래 순서대로 정렬합니다."""
+    def sort_key(w):
+        stat = stats_dict.get(w, {})
+        # 레벨이 0이면서 틀린 적이 있는 단어는 우선순위 0, 나머지는 1
+        priority = 0 if stat.get("level", 0) == 0 and stat.get("wrong", 0) > 0 else 1
+        return (priority, all_words_list.index(w))
+    return sorted(words_to_sort, key=sort_key)
 
-if not st.session_state.all_words and st.session_state.saved_sheets:
-    target = st.session_state.saved_sheets[0] 
-    w, n, s, err = google_db.load_multiple_sheets([target], st.session_state.username)
-    if w: 
-        st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
-        st.session_state.all_words = list(w.keys())
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        due = [word for word in st.session_state.all_words if not s.get(word, {}).get("next_review", "") or s.get(word, {}).get("next_review", "") <= today_str]
-        st.session_state.due_words, st.session_state.word_list = due, (due if due else st.session_state.all_words)
-        st.session_state.current_sheet = target
-
-# --- 조수 함수들 ---
 def play_audio(text):
     tts = gTTS(text=text, lang='en')
     fp = io.BytesIO()
@@ -217,6 +186,44 @@ def submit_spell(user_text):
         st.session_state.test_msg = f"❌ 틀렸습니다! (스펠링: {current_w})"; update_stat(current_w, False)
 
 # ==========================================
+# 🛑 로그인 화면 및 자동 데이터 로드
+# ==========================================
+if not st.session_state.username:
+    st.markdown('<div class="main-title" style="text-align:center;">📖 Veha\'s English Web</div>', unsafe_allow_html=True)
+    with st.form("login_form"):
+        user_input = st.text_input("사용자 이름", placeholder="이름을 입력하세요")
+        if st.form_submit_button("🚀 학습 시작하기", use_container_width=True):
+            if user_input.strip():
+                username = user_input.strip()
+                st.session_state.username = username
+                loaded_sheets = google_db.load_user_sheets(username)
+                if isinstance(loaded_sheets, list):
+                    if loaded_sheets:
+                        st.session_state.saved_sheets = loaded_sheets
+                    else:
+                        st.session_state.saved_sheets = ["맛있는 초등 필수 영단어 01-02"]
+                        res = google_db.save_user_sheets(username, st.session_state.saved_sheets)
+                        if res is not True: st.error(f"⚠️ 설정 저장 실패: {res}"); st.stop()
+                    st.rerun() 
+                else: st.error(f"⚠️ 설정 로드 실패: {loaded_sheets}"); st.stop()
+            else: st.error("이름을 입력해주세요!")
+    st.stop() 
+
+if not st.session_state.all_words and st.session_state.saved_sheets:
+    target = st.session_state.saved_sheets[0] 
+    w, n, s, err = google_db.load_multiple_sheets([target], st.session_state.username)
+    if w: 
+        st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
+        st.session_state.all_words = list(w.keys())
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        due = [word for word in st.session_state.all_words if not s.get(word, {}).get("next_review", "") or s.get(word, {}).get("next_review", "") <= today_str]
+        
+        # 🎯 로그인 직후 '오늘 복습 대상'을 세팅할 때 오답을 맨 앞으로 정렬!
+        st.session_state.due_words = get_sorted_words(due, s, st.session_state.all_words)
+        st.session_state.word_list = st.session_state.due_words if st.session_state.due_words else get_sorted_words(st.session_state.all_words, s, st.session_state.all_words)
+        st.session_state.current_sheet = target
+
+# ==========================================
 # 📱 사이드바
 # ==========================================
 with st.sidebar:
@@ -231,13 +238,8 @@ with st.sidebar:
         if new_sheet and new_sheet not in st.session_state.saved_sheets:
             st.session_state.saved_sheets.append(new_sheet)
             res = google_db.save_user_sheets(st.session_state.username, st.session_state.saved_sheets)
-            if res is True:
-                st.toast("✅ 목록 영구 저장 완료!")
-                time.sleep(0.5)
-                st.rerun()
-            else:
-                st.session_state.saved_sheets.remove(new_sheet) # 원상복구
-                st.error(f"저장 실패: {res}")
+            if res is True: st.toast("✅ 목록 영구 저장 완료!"); time.sleep(0.5); st.rerun()
+            else: st.session_state.saved_sheets.remove(new_sheet); st.error(f"저장 실패: {res}")
             
     st.write("---")
     st.write("✅ **시트 선택 및 정렬**")
@@ -262,7 +264,10 @@ with st.sidebar:
                     st.session_state.all_words = list(w.keys())
                     today_str = datetime.now().strftime("%Y-%m-%d")
                     due = [word for word in st.session_state.all_words if not s.get(word, {}).get("next_review", "") or s.get(word, {}).get("next_review", "") <= today_str]
-                    st.session_state.due_words, st.session_state.word_list = due, (due if due else st.session_state.all_words)
+                    
+                    # 🎯 로드할 때도 오답을 맨 앞으로 정렬!
+                    st.session_state.due_words = get_sorted_words(due, s, st.session_state.all_words)
+                    st.session_state.word_list = st.session_state.due_words if st.session_state.due_words else get_sorted_words(st.session_state.all_words, s, st.session_state.all_words)
                     st.session_state.current_idx, st.session_state.current_sheet = 0, selected_for_action[0]
                     st.session_state.test_active = False 
                     st.success(f"로드 완료!")
@@ -271,27 +276,30 @@ with st.sidebar:
             
     if c_del.button("🗑️ 삭제"):
         if selected_for_action:
-            for s in selected_for_action:
-                st.session_state.saved_sheets.remove(s)
+            for sht in selected_for_action: st.session_state.saved_sheets.remove(sht)
             res = google_db.save_user_sheets(st.session_state.username, st.session_state.saved_sheets)
-            if res is True:
-                st.toast("✅ 삭제 및 영구 저장 완료!")
-                time.sleep(0.5)
-                st.rerun()
+            if res is True: st.toast("✅ 삭제 완료!"); time.sleep(0.5); st.rerun()
             else: st.error(f"삭제 실패: {res}")
 
     if c_sort.button("↕️ 정렬"):
         st.session_state.saved_sheets.sort(key=lambda x: updated_order[x])
         res = google_db.save_user_sheets(st.session_state.username, st.session_state.saved_sheets)
-        if res is True:
-            st.toast("✅ 정렬 및 영구 저장 완료!")
-            time.sleep(0.5)
-            st.rerun()
+        if res is True: st.toast("✅ 정렬 완료!"); time.sleep(0.5); st.rerun()
         else: st.error(f"정렬 실패: {res}")
 
     st.divider()
     target = st.radio("🎯 학습 범위", ["오늘 복습 대상", "전체 단어장"], key="study_target")
-    st.session_state.word_list = st.session_state.due_words if target == "오늘 복습 대상" else st.session_state.all_words
+    
+    # 🎯 범위를 바꿀 때도 무조건 틀린 단어부터 나오게 세팅!
+    if target == "오늘 복습 대상":
+        st.session_state.word_list = st.session_state.due_words if 'due_words' in st.session_state else []
+    else:
+        st.session_state.word_list = get_sorted_words(st.session_state.all_words, st.session_state.stats, st.session_state.all_words) if 'all_words' in st.session_state else []
+    
+    # 인덱스 오류 방지
+    if st.session_state.current_idx >= len(st.session_state.word_list) and len(st.session_state.word_list) > 0:
+        st.session_state.current_idx = 0
+
     st.radio("🔄 카드 방향", ["단어 ➔ 뜻", "뜻 ➔ 단어"], key="card_direction")
     admin_pw = st.text_input("🔐 관리자 비번", type="password")
     st.session_state.is_admin = (admin_pw == st.secrets["admin_password"])
