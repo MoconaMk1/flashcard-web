@@ -12,19 +12,16 @@ def get_gspread_client():
 client = get_gspread_client()
 
 # ==========================================
-# 🎯 영구 설정(시트 목록 및 순서) 저장소
+# 🎯 [수정] 회원님이 직접 만든 '시트 영구 저장소' 활용
 # ==========================================
 def get_config_sheet():
-    config_name = "VEHA_FLASHCARD_CONFIG"
+    config_name = "시트 영구 저장소"
     try:
         sh = client.open(config_name)
+        return sh.sheet1
     except gspread.exceptions.SpreadsheetNotFound:
-        try:
-            sh = client.create(config_name)
-        except Exception as e:
-            # 💡 구글 드라이브 API가 안 켜져 있으면 여기서 에러를 뱉습니다!
-            raise Exception(f"설정 파일을 만들 권한이 없습니다. 구글 클라우드 콘솔에서 'Google Drive API'를 사용 설정해주세요! 상세오류: {e}")
-    return sh.sheet1
+        # 이제 만들려고 시도하지 않고, 못 찾으면 바로 에러를 띄웁니다.
+        raise Exception(f"'{config_name}' 파일을 찾을 수 없습니다. 봇 이메일 편집자 공유를 확인해주세요.")
 
 def load_user_sheets(username):
     try:
@@ -32,9 +29,9 @@ def load_user_sheets(username):
         records = ws.get_all_values()
         for row in records:
             if row and row[0] == username:
-                return row[1:] 
+                return row[1:] # 0번째(이름)을 제외한 나머지 시트 목록 반환
     except Exception as e: 
-        return str(e) # 에러가 나면 숨기지 않고 문자로 반환!
+        return str(e) # 에러 문자를 그대로 반환하여 화면에 띄움
     return []
 
 def save_user_sheets(username, sheet_list):
@@ -46,9 +43,11 @@ def save_user_sheets(username, sheet_list):
             if row and row[0] == username:
                 row_idx = i + 1
                 break
+        
         if row_idx != -1:
-            ws.delete_row(row_idx) # 에러가 자주나는 delete_rows 대신 안전한 delete_row 사용!
-        ws.append_row([username] + sheet_list)
+            ws.delete_rows(row_idx) # 기존 기록 깔끔하게 삭제
+            
+        ws.append_row([username] + sheet_list) # 새 순서대로 덮어쓰기
         return True
     except Exception as e: 
         return str(e)
