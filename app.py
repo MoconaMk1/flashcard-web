@@ -11,7 +11,7 @@ import streamlit.components.v1 as components
 # 1. 브라우저 설정
 st.set_page_config(page_title="Veha's English", page_icon="📖", layout="centered")
 
-# 🎯 일반 UI 디자인 세팅
+# 🎯 일반 UI & 플래시카드 공통 디자인 세팅 (맨 위로 이동시켜서 글자 노출 원천 차단!)
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"], .main {
@@ -41,6 +41,46 @@ st.markdown("""
         color: #d35400 !important;
         background-color: #fdfae6 !important;
     }
+    
+    /* 🎯 진짜 플래시카드 공통 디자인 (입체감, 둥근 모서리, 그라데이션) */
+    [data-testid="stElementContainer"]:has(.giant-card-anchor) + [data-testid="stElementContainer"] button,
+    .element-container:has(.giant-card-anchor) + .element-container button {
+        height: 280px !important;
+        border: 1px solid #e0e6ed !important;
+        border-radius: 20px !important;
+        background: linear-gradient(145deg, #ffffff, #f1f3f5) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: center !important;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.04) !important;
+        transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+        white-space: normal !important;
+    }
+    
+    /* 누를 때 쏙 들어가는 효과 */
+    [data-testid="stElementContainer"]:has(.giant-card-anchor) + [data-testid="stElementContainer"] button:active,
+    .element-container:has(.giant-card-anchor) + .element-container button:active {
+        transform: scale(0.97) translateY(4px) !important;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+    }
+
+    /* 플래시카드 안의 텍스트 크기 */
+    [data-testid="stElementContainer"]:has(.giant-card-anchor) + [data-testid="stElementContainer"] button p:nth-of-type(1),
+    .element-container:has(.giant-card-anchor) + .element-container button p:nth-of-type(1) {
+        font-size: clamp(2.5rem, 8vw, 3.5rem) !important;
+        font-weight: 900 !important;
+        margin: 0 !important;
+    }
+    
+    /* 서브 힌트 텍스트 크기 */
+    [data-testid="stElementContainer"]:has(.giant-card-anchor) + [data-testid="stElementContainer"] button p:nth-of-type(2),
+    .element-container:has(.giant-card-anchor) + .element-container button p:nth-of-type(2) {
+        color: #888 !important;
+        font-size: 1rem !important;
+        margin-top: 15px !important;
+    }
+
     .element-container, [data-testid="stElementContainer"] {
         transition: none !important;
         animation: none !important;
@@ -132,53 +172,10 @@ def render_audio_player():
         components.html(html, width=0, height=0)
         st.session_state.play_audio_b64 = None
 
-# 🎯 [버그 해결] 플래시카드만 콕 집어서 강제로 거대화시키는 완벽한 CSS 주입 로직
+# 🎯 [버그 해결] 글자가 노출되지 않도록 코드를 한 줄로 압축했습니다!
 def render_giant_button(text, hint, color, key):
-    st.markdown(f"""
-    <div id="anchor-{key}"></div>
-    <style>
-    /* 앵커 태그 바로 다음에 오는 버튼 컨테이너를 강제로 카드형태로 바꿈 */
-    [data-testid="stElementContainer"]:has(#anchor-{key}) + [data-testid="stElementContainer"] button,
-    .element-container:has(#anchor-{key}) + .element-container button {{
-        height: 280px !important;
-        border: 1px solid #e0e6ed !important;
-        border-radius: 20px !important;
-        background: linear-gradient(145deg, #ffffff, #f1f3f5) !important;
-        display: flex !important;
-        flex-direction: column !important;
-        justify-content: center !important;
-        align-items: center !important;
-        box-shadow: 0 10px 20px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.04) !important;
-        transition: transform 0.15s ease, box-shadow 0.15s ease !important;
-        white-space: normal !important;
-    }}
-    
-    /* 누를 때 쏙 들어가는 효과 */
-    [data-testid="stElementContainer"]:has(#anchor-{key}) + [data-testid="stElementContainer"] button:active,
-    .element-container:has(#anchor-{key}) + .element-container button:active {{
-        transform: scale(0.97) translateY(4px) !important;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
-    }}
-
-    /* 메인 단어 텍스트 크기 */
-    [data-testid="stElementContainer"]:has(#anchor-{key}) + [data-testid="stElementContainer"] button p:nth-of-type(1),
-    .element-container:has(#anchor-{key}) + .element-container button p:nth-of-type(1) {{
-        font-size: clamp(2.5rem, 8vw, 3.5rem) !important;
-        font-weight: 900 !important;
-        color: {color} !important;
-        margin: 0 !important;
-    }}
-    
-    /* 서브 힌트 텍스트 크기 */
-    [data-testid="stElementContainer"]:has(#anchor-{key}) + [data-testid="stElementContainer"] button p:nth-of-type(2),
-    .element-container:has(#anchor-{key}) + .element-container button p:nth-of-type(2) {{
-        color: #888 !important;
-        font-size: 1rem !important;
-        margin-top: 15px !important;
-    }}
-    </style>
-    """, unsafe_allow_html=True)
-    
+    html_str = f'<div id="anchor-{key}" class="giant-card-anchor"></div><style>[data-testid="stElementContainer"]:has(#anchor-{key}) + [data-testid="stElementContainer"] button p:nth-of-type(1), .element-container:has(#anchor-{key}) + .element-container button p:nth-of-type(1) {{ color: {color} !important; }}</style>'
+    st.markdown(html_str, unsafe_allow_html=True)
     return st.button(f"{text}\n\n{hint}", key=key, use_container_width=True)
 
 def calculate_next_review(level):
@@ -325,7 +322,6 @@ def tab_study_ui():
     front_text = current_word if not st.session_state.show_meaning else mean
     if not is_w2m: front_text = mean if not st.session_state.show_meaning else current_word
     
-    # 🎯 여기서 바로 카드를 그립니다!
     if render_giant_button(front_text, "👆 클릭하여 뒤집기", "#2980B9", "m_card"):
         play_audio(current_word); st.session_state.show_meaning = not st.session_state.show_meaning; st.rerun()
     
@@ -357,7 +353,6 @@ def tab_test_ui():
         
         current_w = st.session_state.test_queue[st.session_state.test_q_count]
         if st.session_state.test_type == "객관식":
-            # 🎯 객관식 질문용 빵빵한 카드
             if render_giant_button(current_w, "🔊 발음 듣기", "#2C3E50", "to"): play_audio(current_w)
             mcq_box = st.empty()
             if not st.session_state.test_answered:
@@ -366,7 +361,6 @@ def tab_test_ui():
                         if st.button(opt, use_container_width=True, key=f"opt_{opt}_{st.session_state.test_q_count}"): submit_mcq(opt); st.rerun()
             else: mcq_box.empty()
         else:
-            # 🎯 주관식 질문용 빵빵한 카드
             render_giant_button(st.session_state.words[current_w], "영단어를 입력하세요", "#2C3E50", "ts")
             sb = st.empty()
             if not st.session_state.test_answered:
