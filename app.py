@@ -64,7 +64,6 @@ if 'word_list' not in st.session_state:
     st.session_state.current_sheet = ""
     st.session_state.stats = {}
     
-    # 🎯 [버그 해결 1] 파이썬의 기본 시트값을 회원님의 시트로 아예 변경했습니다!
     st.session_state.saved_sheets = ["맛있는 초등 필수 영단어 01-02"]
     
     st.session_state.card_direction = "단어 ➔ 뜻" 
@@ -107,14 +106,13 @@ if not st.session_state.username:
     st.stop() 
 
 # ==========================================
-# 🎯 [버그 해결 2] 충돌을 일으키던 자동 불러오기 로직 안전화
+# 🎯 데이터 자동 불러오기
 # ==========================================
-# 이제 데이터가 아예 비어있을 때만 조용히 1번 불러오고, 회원님의 조작을 방해하지 않습니다.
 if not st.session_state.all_words and st.session_state.saved_sheets:
     try:
         target_sheet = st.session_state.saved_sheets[0] 
         w, n, s = google_db.load_multiple_sheets([target_sheet], st.session_state.username)
-        if w: # 데이터가 진짜 있을 때만 덮어쓰기!
+        if w: 
             st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
             st.session_state.all_words = list(w.keys())
             
@@ -235,7 +233,7 @@ with st.sidebar:
         if selected_sheets:
             with st.spinner("데이터를 분석하고 있습니다..."):
                 w, n, s = google_db.load_multiple_sheets(selected_sheets, st.session_state.username)
-                if w: # 데이터가 무사히 로드되었을 때만 교체
+                if w: 
                     st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
                     st.session_state.all_words = list(w.keys())
                     
@@ -244,7 +242,7 @@ with st.sidebar:
                             
                     st.session_state.due_words = due
                     st.session_state.word_list = due if due else st.session_state.all_words
-                    st.session_state.current_idx, st.session_state.current_sheet = selected_sheets[0], selected_sheets[0]
+                    st.session_state.current_idx, st.session_state.current_sheet = 0, selected_sheets[0]
                     st.session_state.test_active = False 
                     st.success(f"로드 완료! 오늘 복습할 단어: {len(due)}개")
                 else:
@@ -374,7 +372,6 @@ def tab_test_ui():
         st.session_state.auto_advance = False
         time.sleep(1.5); st.session_state.test_q_count += 1; prepare_question(); st.rerun()
 
-# 메인 렌더링 시작
 st.markdown('<div class="main-title">📖 Veha\'s English Web</div>', unsafe_allow_html=True)
 
 if not st.session_state.all_words:
@@ -390,4 +387,5 @@ else:
         if st.session_state.stats:
             for w, d in sorted(st.session_state.stats.items(), key=lambda x: x[1]['wrong'], reverse=True):
                 with st.container(border=True):
-                    st.write(f"**{w}** : {st
+                    st.write(f"**{w}** : {st.session_state.words.get(w, '')}")
+                    st.caption(f"⭕ {d.get('correct',0)} | ❌ {d.get('wrong',0)} &nbsp;&nbsp; 📈 Lv.{d.get('level',0)} &nbsp;&nbsp; 📅 복습: {d.get('next_review', '오늘')}")
