@@ -457,7 +457,7 @@ def tab_test_ui():
     elif st.session_state.test_finished:
         st.balloons(); st.success(f"🎉 시험 종료! 점수: {st.session_state.test_score}/{st.session_state.test_q_max}")
         if st.button("처음으로 돌아가기", use_container_width=True): st.session_state.test_active = False; st.rerun()
-  else:
+    else:
         cp, cs = st.columns([7, 3])
         cp.progress(st.session_state.test_q_count / st.session_state.test_q_max)
         if cs.button("⏹️ 중단"): 
