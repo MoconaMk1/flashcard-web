@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 # 1. 브라우저 설정
 st.set_page_config(page_title="Veha's English", page_icon="📖", layout="centered")
 
-# 🎯 모바일 화면 스크롤 차단 및 디자인 & 잔상 제거 CSS
+# 🎯 모바일 스크롤 차단 및 잔상 제거 CSS
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"], .main {
@@ -37,8 +37,6 @@ st.markdown("""
         color: #d35400 !important;
         background-color: #fdfae6 !important;
     }
-    
-    /* 요소가 사라질 때 흐려지는 잔상(Ghosting) 강제 차단 */
     .element-container, [data-testid="stElementContainer"] {
         transition: none !important;
         animation: none !important;
@@ -78,15 +76,25 @@ if 'play_audio_b64' not in st.session_state:
 if 'play_audio_key' not in st.session_state:
     st.session_state.play_audio_key = "init"
 
-# 🎯 오디오 생성 조수
+# 🎯 오디오 생성 및 숨김 플레이어 출력 조수
 def play_audio(text):
     tts = gTTS(text=text, lang='en')
     fp = io.BytesIO()
     tts.write_to_fp(fp)
     fp.seek(0)
     st.session_state.play_audio_b64 = base64.b64encode(fp.read()).decode()
-    # HTML 내용이 매번 바뀌도록 시간을 기록해 둡니다
     st.session_state.play_audio_key = str(time.time())
+
+def render_audio_player():
+    if st.session_state.play_audio_b64:
+        html = f"""
+        <audio autoplay="true">
+            <source src="data:audio/mp3;base64,{st.session_state.play_audio_b64}" type="audio/mp3">
+        </audio>
+        <div style='display:none;'>{st.session_state.play_audio_key}</div>
+        """
+        components.html(html, width=0, height=0)
+        st.session_state.play_audio_b64 = None
 
 # 거대 플래시카드 버튼 조수
 def render_giant_button(text, hint, color, key):
@@ -211,7 +219,147 @@ with st.sidebar:
     st.session_state.is_admin = (admin_pw == st.secrets["admin_password"])
 
 # ==========================================
-# 📱 메인 화면
+# 🎯 [핵심 마법] 화면 깜빡임을 방지하는 부분 새로고침 블록들!
+# ==========================================
+@st.fragment
+def tab_list_ui():
+    if st.session_state.is_admin:
+        with st.expander("➕ 단어 즉시 등록"):
+            with st.form("add_form", clear_on_submit=True):
+                col1, col2, col3 = st.columns(3)
+                w_i, m_i, n_i = col1.text_input("단어"), col2.text_input("뜻"), col3.text_input("설명")
+                if st.form_submit_button("등록"):
+                    google_db.add_word_to_sheet(st.session_state.current_sheet, w_i, m_i, n_i)
+                    st.rerun()
+
+    for w in st.session_state.word_list:
+        mean = st.session_state.words[w]
+        note = st.session_state.notes.get(w, "").strip()
+        with st.container(border=True):
+            if note:
+                with st.popover("💡 부가설명 보기", use_container_width=True): st.info(note)
+            
+            if st.button(f"**{w}** : {mean}", key=f"btn_w_{w}", use_container_width=True):
+                play_audio(w)
+            
+            if st.session_state.is_admin:
+                with st.expander("⚙️ 수정/삭제"):
+                    new_w = st.text_input("단어", value=w, key=f"ew_{w}")
+                    new_m = st.text_input("뜻", value=mean, key=f"em_{w}")
+                    new_n = st.text_input("설명", value=note, key=f"en_{w}")
+                    ec1, ec2 = st.columns(2)
+                    if ec1.button("💾 저장", key=f"sv_{w}"):
+                        google_db.edit_word_in_sheet(st.session_state.current_sheet, w, new_w, new_m, new_n)
+                        st.rerun()
+                    if ec2.button("🗑️ 삭제", key=f"del_{w}", type="primary"):
+                        google_db.delete_word_from_sheet(st.session_state.current_sheet, w)
+                        st.rerun()
+    render_audio_player()
+
+@st.fragment
+def tab_study_ui():
+    current_word = st.session_state.word_list[st.session_state.current_idx]
+    mean = st.session_state.words[current_word]
+    note = st.session_state.notes.get(current_word, "")
+    is_w2m = (st.session_state.card_direction == "단어 ➔ 뜻")
+    
+    front_text, front_color = (current_word, "#2980B9") if not st.session_state.show_meaning else (mean, "#D35400")
+    if not is_w2m: front_text, front_color = (mean, "#2980B9") if not st.session_state.show_meaning else (current_word, "#D35400")
+
+    if render_giant_button(front_text, "👆 클릭하여 뒤집고 발음 듣기", front_color, "main_card_btn"):
+        play_audio(current_word) 
+        st.session_state.show_meaning = not st.session_state.show_meaning 
+        st.rerun() # 🚀 이제 탭 안쪽만 번개처럼 새로고침 됩니다!
+    
+    if note and st.session_state.show_meaning: st.info(f"💡 {note}")
+    
+    if st.button("➡️ 다음 단어", use_container_width=True, type="primary"):
+        st.session_state.current_idx = (st.session_state.current_idx + 1) % len(st.session_state.word_list)
+        st.session_state.show_meaning = False
+        st.rerun()
+        
+    render_audio_player()
+
+@st.fragment
+def tab_test_ui():
+    if not st.session_state.test_active:
+        test_type = st.selectbox("시험 방식", ["객관식", "스펠링"])
+        q_count = st.number_input("문제 수", min_value=1, value=min(10, len(st.session_state.word_list)))
+        if st.button("🚀 시작", type="primary", use_container_width=True):
+            st.session_state.test_active, st.session_state.test_type = True, test_type
+            st.session_state.test_q_max, st.session_state.test_q_count, st.session_state.test_score = q_count, 0, 0
+            pool = list(st.session_state.word_list); random.shuffle(pool); st.session_state.test_queue = pool[:q_count]
+            prepare_question()
+            st.rerun()
+    else:
+        col_prog, col_stop = st.columns([7, 3])
+        with col_prog:
+            st.progress(st.session_state.test_q_count / st.session_state.test_q_max)
+            st.caption(f"문제: {st.session_state.test_q_count + 1} / {st.session_state.test_q_max} (점수: {st.session_state.test_score})")
+        
+        with col_stop:
+            if st.button("⏹️ 중단", use_container_width=True):
+                st.session_state.test_active = False
+                st.rerun()
+        
+        current_w = st.session_state.test_queue[st.session_state.test_q_count]
+        
+        if st.session_state.test_type == "객관식":
+            if render_giant_button(current_w, "🔊 클릭하여 발음 듣기", "#2C3E50", "test_card_obj"):
+                play_audio(current_w)
+            
+            mcq_box = st.empty()
+            if not st.session_state.test_answered:
+                with mcq_box.container():
+                    for opt in st.session_state.test_options:
+                        if st.button(opt, use_container_width=True): 
+                            submit_mcq(opt)
+                            st.rerun()
+            else:
+                mcq_box.empty()
+        else:
+            if render_giant_button(st.session_state.words[current_w], "아래에 영단어를 적어주세요", "#2C3E50", "test_card_spl"):
+                pass 
+            
+            spl_box = st.empty()
+            if not st.session_state.test_answered:
+                with spl_box.container():
+                    with st.form(f"f_{st.session_state.test_q_count}"):
+                        u = st.text_input("영어 입력:"); 
+                        if st.form_submit_button("확인"): 
+                            submit_spell(u)
+                            st.rerun()
+            else:
+                spl_box.empty()
+        
+        if st.session_state.test_answered:
+            if "⭕" in st.session_state.test_msg: st.success(st.session_state.test_msg)
+            else: st.error(st.session_state.test_msg)
+                
+            play_audio(current_w)
+            
+            if st.session_state.test_q_count < st.session_state.test_q_max - 1:
+                st.caption("⏳ 잠시 후 자동으로 넘어갑니다...")
+                st.session_state.auto_advance = True
+            else:
+                st.info(f"🎉 종료! 점수: {st.session_state.test_score}/{st.session_state.test_q_max}")
+                if st.button("저장 💾"): 
+                    google_db.save_stats(st.session_state.current_sheet, st.session_state.stats)
+                    st.session_state.test_active = False
+                    st.rerun()
+
+    render_audio_player()
+    
+    # 🎯 탭 안에서만 작동하는 완벽한 1.5초 딜레이
+    if st.session_state.auto_advance:
+        st.session_state.auto_advance = False
+        time.sleep(1.5) 
+        st.session_state.test_q_count += 1
+        prepare_question()
+        st.rerun()
+
+# ==========================================
+# 📱 메인 화면 렌더링
 # ==========================================
 st.markdown('<div class="main-title">📖 Veha\'s English Web</div>', unsafe_allow_html=True)
 
@@ -220,143 +368,18 @@ if not st.session_state.word_list:
 else:
     tab_list, tab_study, tab_test, tab_stats = st.tabs(["📋 단어 목록", "📖 기본 학습", "📝 시험 모드", "📊 현황판"])
 
-    # --- [탭 1] 단어 목록 ---
     with tab_list:
-        if st.session_state.is_admin:
-            with st.expander("➕ 단어 즉시 등록"):
-                with st.form("add_form", clear_on_submit=True):
-                    col1, col2, col3 = st.columns(3)
-                    w_i, m_i, n_i = col1.text_input("단어"), col2.text_input("뜻"), col3.text_input("설명")
-                    if st.form_submit_button("등록"):
-                        google_db.add_word_to_sheet(st.session_state.current_sheet, w_i, m_i, n_i); st.rerun()
+        tab_list_ui()
 
-        for w in st.session_state.word_list:
-            mean = st.session_state.words[w]
-            note = st.session_state.notes.get(w, "").strip()
-            with st.container(border=True):
-                if note:
-                    with st.popover("💡 부가설명 보기", use_container_width=True): st.info(note)
-                
-                if st.button(f"**{w}** : {mean}", key=f"btn_w_{w}", use_container_width=True):
-                    play_audio(w) 
-                
-                if st.session_state.is_admin:
-                    with st.expander("⚙️ 수정/삭제"):
-                        new_w = st.text_input("단어", value=w, key=f"ew_{w}")
-                        new_m = st.text_input("뜻", value=mean, key=f"em_{w}")
-                        new_n = st.text_input("설명", value=note, key=f"en_{w}")
-                        ec1, ec2 = st.columns(2)
-                        if ec1.button("💾 저장", key=f"sv_{w}"):
-                            google_db.edit_word_in_sheet(st.session_state.current_sheet, w, new_w, new_m, new_n); st.rerun()
-                        if ec2.button("🗑️ 삭제", key=f"del_{w}", type="primary"):
-                            google_db.delete_word_from_sheet(st.session_state.current_sheet, w); st.rerun()
-
-    # --- [탭 2] 기본 학습 ---
     with tab_study:
-        current_word = st.session_state.word_list[st.session_state.current_idx]
-        mean = st.session_state.words[current_word]
-        note = st.session_state.notes.get(current_word, "")
-        is_w2m = (st.session_state.card_direction == "단어 ➔ 뜻")
-        
-        front_text, front_color = (current_word, "#2980B9") if not st.session_state.show_meaning else (mean, "#D35400")
-        if not is_w2m: front_text, front_color = (mean, "#2980B9") if not st.session_state.show_meaning else (current_word, "#D35400")
+        tab_study_ui()
 
-        if render_giant_button(front_text, "👆 클릭하여 뒤집고 발음 듣기", front_color, "main_card_btn"):
-            play_audio(current_word) 
-            st.session_state.show_meaning = not st.session_state.show_meaning 
-            st.rerun()
-        
-        if note and st.session_state.show_meaning: st.info(f"💡 {note}")
-        
-        # 발음 듣기 버튼 삭제 및 다음 단어 버튼만 유지
-        if st.button("➡️ 다음 단어", use_container_width=True, type="primary"):
-            st.session_state.current_idx = (st.session_state.current_idx + 1) % len(st.session_state.word_list)
-            st.session_state.show_meaning = False; st.rerun()
-
-    # --- [탭 3] 시험 모드 ---
     with tab_test:
-        if not st.session_state.test_active:
-            test_type = st.selectbox("시험 방식", ["객관식", "스펠링"])
-            q_count = st.number_input("문제 수", min_value=1, value=min(10, len(st.session_state.word_list)))
-            if st.button("🚀 시작", type="primary", use_container_width=True):
-                st.session_state.test_active, st.session_state.test_type = True, test_type
-                st.session_state.test_q_max, st.session_state.test_q_count, st.session_state.test_score = q_count, 0, 0
-                pool = list(st.session_state.word_list); random.shuffle(pool); st.session_state.test_queue = pool[:q_count]
-                prepare_question(); st.rerun()
-        else:
-            col_prog, col_stop = st.columns([7, 3])
-            with col_prog:
-                st.progress(st.session_state.test_q_count / st.session_state.test_q_max)
-                st.caption(f"문제: {st.session_state.test_q_count + 1} / {st.session_state.test_q_max} (점수: {st.session_state.test_score})")
-            
-            with col_stop:
-                if st.button("⏹️ 중단", use_container_width=True):
-                    st.session_state.test_active = False; st.rerun()
-            
-            current_w = st.session_state.test_queue[st.session_state.test_q_count]
-            
-            if st.session_state.test_type == "객관식":
-                if render_giant_button(current_w, "🔊 클릭하여 발음 듣기", "#2C3E50", "test_card_obj"):
-                    play_audio(current_w)
-                
-                mcq_box = st.empty()
-                if not st.session_state.test_answered:
-                    with mcq_box.container():
-                        for opt in st.session_state.test_options:
-                            if st.button(opt, use_container_width=True): submit_mcq(opt); st.rerun()
-                else:
-                    mcq_box.empty()
-            else:
-                if render_giant_button(st.session_state.words[current_w], "아래에 영단어를 적어주세요", "#2C3E50", "test_card_spl"):
-                    pass 
-                
-                spl_box = st.empty()
-                if not st.session_state.test_answered:
-                    with spl_box.container():
-                        with st.form(f"f_{st.session_state.test_q_count}"):
-                            u = st.text_input("영어 입력:"); 
-                            if st.form_submit_button("확인"): submit_spell(u); st.rerun()
-                else:
-                    spl_box.empty()
-            
-            if st.session_state.test_answered:
-                if "⭕" in st.session_state.test_msg:
-                    st.success(st.session_state.test_msg)
-                else:
-                    st.error(st.session_state.test_msg)
-                    
-                play_audio(current_w)
-                
-                if st.session_state.test_q_count < st.session_state.test_q_max - 1:
-                    st.caption("⏳ 잠시 후 자동으로 넘어갑니다...")
-                    st.session_state.auto_advance = True
-                else:
-                    st.info(f"🎉 종료! 점수: {st.session_state.test_score}/{st.session_state.test_q_max}")
-                    if st.button("저장 💾"): google_db.save_stats(st.session_state.current_sheet, st.session_state.stats); st.session_state.test_active = False; st.rerun()
+        tab_test_ui()
 
-    # --- [탭 4] 현황판 ---
     with tab_stats:
         if st.session_state.stats:
             for w, d in sorted(st.session_state.stats.items(), key=lambda x: x[1]['wrong'], reverse=True):
                 with st.container(border=True):
                     st.write(f"**{w}** : {st.session_state.words.get(w, '')}")
                     st.caption(f"⭕ {d['correct']} | ❌ {d['wrong']}")
-
-# 🎯 [에러 수정 완료!] 존재하지 않는 key 파라미터를 삭제하고, div 태그 내용 변경으로 브라우저를 속입니다!
-if st.session_state.play_audio_b64:
-    html = f"""
-    <audio autoplay="true">
-        <source src="data:audio/mp3;base64,{st.session_state.play_audio_b64}" type="audio/mp3">
-    </audio>
-    <div style='display:none;'>{st.session_state.play_audio_key}</div>
-    """
-    components.html(html, width=0, height=0)
-    st.session_state.play_audio_b64 = None
-
-# 자동 넘김 딜레이
-if st.session_state.auto_advance:
-    st.session_state.auto_advance = False
-    time.sleep(1.5) 
-    st.session_state.test_q_count += 1
-    prepare_question()
-    st.rerun()
