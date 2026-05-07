@@ -80,10 +80,13 @@ if 'play_audio_b64' not in st.session_state:
 if 'play_audio_key' not in st.session_state:
     st.session_state.play_audio_key = "init"
     
-# [여기에 복사해 넣으세요: 앱이 처음 켜질 때 '영어' 시트 자동 로드]
-if not st.session_state.word_list and "영어" in st.session_state.saved_sheets:
+# [여기에 복사해 넣으세요: 특정 이름이 아닌 '첫 번째 시트'를 유연하게 자동 로드]
+if not st.session_state.word_list and st.session_state.saved_sheets:
     try:
-        w, n, s = google_db.load_multiple_sheets(["영어"])
+        # "영어"라는 이름 대신, 리스트의 첫 번째[0] 시트를 타겟으로 잡습니다.
+        target_sheet = st.session_state.saved_sheets[0] 
+        
+        w, n, s = google_db.load_multiple_sheets([target_sheet])
         st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
         st.session_state.all_words = list(w.keys())
         
@@ -93,7 +96,7 @@ if not st.session_state.word_list and "영어" in st.session_state.saved_sheets:
         
         st.session_state.due_words = due
         st.session_state.word_list = due if due else st.session_state.all_words
-        st.session_state.current_sheet = "영어"
+        st.session_state.current_sheet = target_sheet
     except:
         pass
 
