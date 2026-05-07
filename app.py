@@ -50,7 +50,7 @@ st.markdown("""
 
 # 2. 앱의 기억력 세팅
 if 'username' not in st.session_state:
-    st.session_state.username = None # 🎯 로그인된 사용자 이름 저장 공간
+    st.session_state.username = None 
     
 if 'word_list' not in st.session_state:
     st.session_state.words = {}
@@ -63,9 +63,11 @@ if 'word_list' not in st.session_state:
     st.session_state.is_admin = False
     st.session_state.current_sheet = ""
     st.session_state.stats = {}
-    st.session_state.saved_sheets = ["맛있는 초등 필수 영단어 01-02"]
-    st.session_state.card_direction = "단어 ➔ 뜻" 
     
+    # 🎯 [버그 해결 1] 파이썬의 기본 시트값을 회원님의 시트로 아예 변경했습니다!
+    st.session_state.saved_sheets = ["맛있는 초등 필수 영단어 01-02"]
+    
+    st.session_state.card_direction = "단어 ➔ 뜻" 
     st.session_state.test_active = False
     st.session_state.test_type = "객관식"
     st.session_state.test_q_max = 0
@@ -84,7 +86,7 @@ if 'play_audio_key' not in st.session_state:
     st.session_state.play_audio_key = "init"
 
 # ==========================================
-# 🛑 [핵심] 로그인 화면 (로그인 안 하면 아래 코드 실행 불가!)
+# 🛑 로그인 화면
 # ==========================================
 if not st.session_state.username:
     st.markdown('<div class="main-title" style="text-align:center;">📖 Veha\'s English Web</div>', unsafe_allow_html=True)
@@ -101,26 +103,27 @@ if not st.session_state.username:
                 st.error("이름을 꼭 입력해주세요!")
             else:
                 st.session_state.username = user_input.strip()
-                st.rerun() # 이름 저장 후 앱 새로고침!
-                
-    st.stop() # 로그인을 안 했으면 파이썬이 여기서 멈춥니다!
+                st.rerun() 
+    st.stop() 
 
 # ==========================================
-# 🎯 [핵심] 로그인 완료 시 자동 데이터 불러오기 (하드코딩 제거)
+# 🎯 [버그 해결 2] 충돌을 일으키던 자동 불러오기 로직 안전화
 # ==========================================
-if not st.session_state.word_list and st.session_state.saved_sheets:
+# 이제 데이터가 아예 비어있을 때만 조용히 1번 불러오고, 회원님의 조작을 방해하지 않습니다.
+if not st.session_state.all_words and st.session_state.saved_sheets:
     try:
-        target_sheet = st.session_state.saved_sheets[0] # 첫 번째 시트를 자동으로 타겟팅!
+        target_sheet = st.session_state.saved_sheets[0] 
         w, n, s = google_db.load_multiple_sheets([target_sheet], st.session_state.username)
-        st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
-        st.session_state.all_words = list(w.keys())
-        
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        due = [word for word in st.session_state.all_words if not st.session_state.stats.get(word, {}).get("next_review", "") or st.session_state.stats.get(word, {}).get("next_review", "") <= today_str]
-        
-        st.session_state.due_words = due
-        st.session_state.word_list = due if due else st.session_state.all_words
-        st.session_state.current_sheet = target_sheet
+        if w: # 데이터가 진짜 있을 때만 덮어쓰기!
+            st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
+            st.session_state.all_words = list(w.keys())
+            
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            due = [word for word in st.session_state.all_words if not st.session_state.stats.get(word, {}).get("next_review", "") or st.session_state.stats.get(word, {}).get("next_review", "") <= today_str]
+            
+            st.session_state.due_words = due
+            st.session_state.word_list = due if due else st.session_state.all_words
+            st.session_state.current_sheet = target_sheet
     except:
         pass
 
@@ -210,10 +213,9 @@ def submit_spell(user_text):
 # 📱 사이드바
 # ==========================================
 with st.sidebar:
-    # 🎯 현재 접속한 사용자 환영 인사 및 로그아웃
     st.markdown(f"### 👤 **{st.session_state.username}**님")
     if st.button("🚪 로그아웃", use_container_width=True):
-        st.session_state.clear() # 모든 기억을 지우고 로그아웃!
+        st.session_state.clear() 
         st.rerun()
     st.divider()
 
@@ -231,19 +233,22 @@ with st.sidebar:
     selected_sheets = st.multiselect("📂 불러올 시트 선택", options=st.session_state.saved_sheets, default=st.session_state.saved_sheets[:1])
     if st.button("🚀 데이터 다시 불러오기", type="primary", use_container_width=True):
         if selected_sheets:
-            with st.spinner("알고리즘 분석 및 병합 중..."):
+            with st.spinner("데이터를 분석하고 있습니다..."):
                 w, n, s = google_db.load_multiple_sheets(selected_sheets, st.session_state.username)
-                st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
-                st.session_state.all_words = list(w.keys())
-                
-                today_str = datetime.now().strftime("%Y-%m-%d")
-                due = [word for word in st.session_state.all_words if not st.session_state.stats.get(word, {}).get("next_review", "") or st.session_state.stats.get(word, {}).get("next_review", "") <= today_str]
-                        
-                st.session_state.due_words = due
-                st.session_state.word_list = due if due else st.session_state.all_words
-                st.session_state.current_idx, st.session_state.current_sheet = 0, selected_sheets[0]
-                st.session_state.test_active = False 
-                st.success(f"로드 완료! 오늘 복습할 단어: {len(due)}개")
+                if w: # 데이터가 무사히 로드되었을 때만 교체
+                    st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
+                    st.session_state.all_words = list(w.keys())
+                    
+                    today_str = datetime.now().strftime("%Y-%m-%d")
+                    due = [word for word in st.session_state.all_words if not st.session_state.stats.get(word, {}).get("next_review", "") or st.session_state.stats.get(word, {}).get("next_review", "") <= today_str]
+                            
+                    st.session_state.due_words = due
+                    st.session_state.word_list = due if due else st.session_state.all_words
+                    st.session_state.current_idx, st.session_state.current_sheet = selected_sheets[0], selected_sheets[0]
+                    st.session_state.test_active = False 
+                    st.success(f"로드 완료! 오늘 복습할 단어: {len(due)}개")
+                else:
+                    st.error("데이터를 찾을 수 없습니다. 구글 시트 탭 이름이 '단어장'인지 확인해주세요!")
 
     st.divider()
     st.write("🎯 학습 범위 선택")
@@ -359,7 +364,6 @@ def tab_test_ui():
                 st.session_state.auto_advance = True
             else:
                 with st.spinner("알고리즘 반영 및 자동 저장 중..."):
-                    # 🎯 [수정] username을 함께 넘겨서 내 전용 시트에만 저장!
                     google_db.save_stats(st.session_state.current_sheet, st.session_state.stats, st.session_state.username)
                 time.sleep(1.5)
                 st.session_state.test_finished = True
@@ -370,6 +374,7 @@ def tab_test_ui():
         st.session_state.auto_advance = False
         time.sleep(1.5); st.session_state.test_q_count += 1; prepare_question(); st.rerun()
 
+# 메인 렌더링 시작
 st.markdown('<div class="main-title">📖 Veha\'s English Web</div>', unsafe_allow_html=True)
 
 if not st.session_state.all_words:
@@ -385,5 +390,4 @@ else:
         if st.session_state.stats:
             for w, d in sorted(st.session_state.stats.items(), key=lambda x: x[1]['wrong'], reverse=True):
                 with st.container(border=True):
-                    st.write(f"**{w}** : {st.session_state.words.get(w, '')}")
-                    st.caption(f"⭕ {d.get('correct',0)} | ❌ {d.get('wrong',0)} &nbsp;&nbsp; 📈 Lv.{d.get('level',0)} &nbsp;&nbsp; 📅 복습: {d.get('next_review', '오늘')}")
+                    st.write(f"**{w}** : {st
