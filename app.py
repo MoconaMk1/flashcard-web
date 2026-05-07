@@ -84,7 +84,6 @@ if 'word_list' not in st.session_state:
     st.session_state.words = {}
     st.session_state.notes = {}
     st.session_state.all_words = []
-    st.session_state.due_words = []
     st.session_state.word_list = []
     st.session_state.current_idx = 0
     st.session_state.show_meaning = False
@@ -110,16 +109,21 @@ if 'play_audio_key' not in st.session_state:
     st.session_state.play_audio_key = "init"
 
 # ==========================================
-# 🧠 [신규] 핵심 조수 함수 (우선순위 정렬 등)
+# 🧠 핵심 조수 함수
 # ==========================================
-def get_sorted_words(words_to_sort, stats_dict, all_words_list):
-    """틀린 단어를 무조건 0순위로 맨 앞에 세우고, 나머지는 원래 순서대로 정렬합니다."""
+def get_sorted_full_list(all_words_list, stats_dict):
+    """
+    🎯 [수정된 핵심 로직]
+    단어 전체를 반환하되, '틀린 단어'를 맨 앞으로 보냅니다.
+    """
     def sort_key(w):
         stat = stats_dict.get(w, {})
-        # 레벨이 0이면서 틀린 적이 있는 단어는 우선순위 0, 나머지는 1
+        # 레벨이 0이면서 오답이 있는 경우 0순위, 나머지는 1순위
         priority = 0 if stat.get("level", 0) == 0 and stat.get("wrong", 0) > 0 else 1
+        # (우선순위, 시트의 원래 순서) 순으로 정렬
         return (priority, all_words_list.index(w))
-    return sorted(words_to_sort, key=sort_key)
+    
+    return sorted(all_words_list, key=sort_key)
 
 def play_audio(text):
     tts = gTTS(text=text, lang='en')
@@ -186,7 +190,7 @@ def submit_spell(user_text):
         st.session_state.test_msg = f"❌ 틀렸습니다! (스펠링: {current_w})"; update_stat(current_w, False)
 
 # ==========================================
-# 🛑 로그인 화면 및 자동 데이터 로드
+# 🛑 로그인 화면
 # ==========================================
 if not st.session_state.username:
     st.markdown('<div class="main-title" style="text-align:center;">📖 Veha\'s English Web</div>', unsafe_allow_html=True)
@@ -209,18 +213,14 @@ if not st.session_state.username:
             else: st.error("이름을 입력해주세요!")
     st.stop() 
 
+# 🎯 로그인 직후 자동 로드
 if not st.session_state.all_words and st.session_state.saved_sheets:
     target = st.session_state.saved_sheets[0] 
     w, n, s, err = google_db.load_multiple_sheets([target], st.session_state.username)
     if w: 
         st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
         st.session_state.all_words = list(w.keys())
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        due = [word for word in st.session_state.all_words if not s.get(word, {}).get("next_review", "") or s.get(word, {}).get("next_review", "") <= today_str]
-        
-        # 🎯 로그인 직후 '오늘 복습 대상'을 세팅할 때 오답을 맨 앞으로 정렬!
-        st.session_state.due_words = get_sorted_words(due, s, st.session_state.all_words)
-        st.session_state.word_list = st.session_state.due_words if st.session_state.due_words else get_sorted_words(st.session_state.all_words, s, st.session_state.all_words)
+        st.session_state.word_list = get_sorted_full_list(st.session_state.all_words, s)
         st.session_state.current_sheet = target
 
 # ==========================================
@@ -243,10 +243,8 @@ with st.sidebar:
             
     st.write("---")
     st.write("✅ **시트 선택 및 정렬**")
-    
     selected_for_action = []
     updated_order = {}
-    
     for i, sheet in enumerate(st.session_state.saved_sheets):
         c1, c2 = st.columns([7, 3])
         chk = c1.checkbox(sheet, key=f"chk_{sheet}")
@@ -262,15 +260,11 @@ with st.sidebar:
                 if w: 
                     st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
                     st.session_state.all_words = list(w.keys())
-                    today_str = datetime.now().strftime("%Y-%m-%d")
-                    due = [word for word in st.session_state.all_words if not s.get(word, {}).get("next_review", "") or s.get(word, {}).get("next_review", "") <= today_str]
-                    
-                    # 🎯 로드할 때도 오답을 맨 앞으로 정렬!
-                    st.session_state.due_words = get_sorted_words(due, s, st.session_state.all_words)
-                    st.session_state.word_list = st.session_state.due_words if st.session_state.due_words else get_sorted_words(st.session_state.all_words, s, st.session_state.all_words)
+                    # 🎯 로드 시 전체 단어를 오답 우선순위로 정렬해서 세팅!
+                    st.session_state.word_list = get_sorted_full_list(st.session_state.all_words, s)
                     st.session_state.current_idx, st.session_state.current_sheet = 0, selected_for_action[0]
                     st.session_state.test_active = False 
-                    st.success(f"로드 완료!")
+                    st.success(f"전체 로드 완료!")
                 elif err: st.error(err)
         else: st.warning("시트를 체크해주세요.")
             
@@ -288,24 +282,22 @@ with st.sidebar:
         else: st.error(f"정렬 실패: {res}")
 
     st.divider()
-    target = st.radio("🎯 학습 범위", ["오늘 복습 대상", "전체 단어장"], key="study_target")
+    # 🎯 학습 범위 라디오 버튼은 유지하되, 모든 모드에서 정렬 로직이 작동하게 함
+    target_option = st.radio("🎯 학습 범위 선택", ["전체 단어 (오답 우선)", "오늘 복습 대상만"], key="study_target")
     
-    # 🎯 범위를 바꿀 때도 무조건 틀린 단어부터 나오게 세팅!
-    if target == "오늘 복습 대상":
-        st.session_state.word_list = st.session_state.due_words if 'due_words' in st.session_state else []
+    if target_option == "전체 단어 (오답 우선)":
+        st.session_state.word_list = get_sorted_full_list(st.session_state.all_words, st.session_state.stats)
     else:
-        st.session_state.word_list = get_sorted_words(st.session_state.all_words, st.session_state.stats, st.session_state.all_words) if 'all_words' in st.session_state else []
-    
-    # 인덱스 오류 방지
-    if st.session_state.current_idx >= len(st.session_state.word_list) and len(st.session_state.word_list) > 0:
-        st.session_state.current_idx = 0
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        due = [word for word in st.session_state.all_words if not st.session_state.stats.get(word, {}).get("next_review", "") or st.session_state.stats.get(word, {}).get("next_review", "") <= today_str]
+        st.session_state.word_list = get_sorted_full_list(due, st.session_state.stats)
 
     st.radio("🔄 카드 방향", ["단어 ➔ 뜻", "뜻 ➔ 단어"], key="card_direction")
     admin_pw = st.text_input("🔐 관리자 비번", type="password")
     st.session_state.is_admin = (admin_pw == st.secrets["admin_password"])
 
 # ==========================================
-# 📱 메인 화면
+# 📱 메인 화면 렌더링
 # ==========================================
 @st.fragment
 def tab_list_ui():
@@ -316,12 +308,20 @@ def tab_list_ui():
                 wi, mi, ni = c1.text_input("단어"), c2.text_input("뜻"), c3.text_input("설명")
                 if st.form_submit_button("등록"):
                     google_db.add_word_to_sheet(st.session_state.current_sheet, wi, mi, ni); st.rerun()
+    
+    # 🎯 목록 상단에 현재 상태 표시
+    st.caption(f"총 {len(st.session_state.word_list)}개의 단어가 나열되어 있습니다. (틀린 단어 우선 정렬)")
+    
     for w in st.session_state.word_list:
         mean, note = st.session_state.words[w], st.session_state.notes.get(w, "").strip()
         with st.container(border=True):
             if note:
                 with st.popover("💡", use_container_width=True): st.info(note)
-            if st.button(f"**{w}** : {mean}", key=f"bw_{w}", use_container_width=True): play_audio(w)
+            
+            # 틀린 단어는 이름 앞에 아이콘을 달아줌
+            prefix = "⚠️ " if st.session_state.stats.get(w, {}).get("level", 0) == 0 and st.session_state.stats.get(w, {}).get("wrong", 0) > 0 else ""
+            if st.button(f"{prefix}**{w}** : {mean}", key=f"bw_{w}", use_container_width=True): play_audio(w)
+            
             if st.session_state.is_admin:
                 with st.expander("⚙️ 수정"):
                     nw, nm, nn = st.text_input("단", value=w, key=f"ew_{w}"), st.text_input("뜻", value=mean, key=f"em_{w}"), st.text_input("설", value=note, key=f"en_{w}")
@@ -338,7 +338,7 @@ def tab_study_ui():
     front_text = current_word if not st.session_state.show_meaning else mean
     if not is_w2m: front_text = mean if not st.session_state.show_meaning else current_word
     
-    if render_giant_button(front_text, "👆 클릭하여 뒤집기", "#2980B9", "m_card"):
+    if render_giant_button(front_text, f"{st.session_state.current_idx + 1} / {len(st.session_state.word_list)} 👆 뒤집기", "#2980B9", "m_card"):
         play_audio(current_word); st.session_state.show_meaning = not st.session_state.show_meaning; st.rerun()
     
     if note and st.session_state.show_meaning: st.info(f"💡 {note}")
@@ -357,6 +357,7 @@ def tab_test_ui():
         if st.button("🚀 시작", type="primary", use_container_width=True):
             st.session_state.test_active, st.session_state.test_type = True, test_type
             st.session_state.test_q_max, st.session_state.test_q_count, st.session_state.test_score = q_count, 0, 0
+            # 시험은 공부한 순서대로 나오면 안되니까 랜덤으로 섞음!
             pool = list(st.session_state.word_list); random.shuffle(pool); st.session_state.test_queue = pool[:q_count]
             prepare_question(); st.rerun()
     elif st.session_state.test_finished:
