@@ -116,8 +116,6 @@ if 'play_audio_b64' not in st.session_state:
     st.session_state.play_audio_b64 = None
 if 'play_audio_key' not in st.session_state:
     st.session_state.play_audio_key = "init"
-
-# 다중 노트북용 딕셔너리 세팅
 if 'notebooks' not in st.session_state:
     st.session_state.notebooks = {}
 if 'current_notebook_page' not in st.session_state:
@@ -220,9 +218,7 @@ if not st.session_state.username:
                     target, direction = google_db.load_user_settings(username)
                     st.session_state.study_target = target
                     st.session_state.card_direction = direction
-                    
                     st.session_state.notebooks = google_db.load_user_notebooks(username)
-                    
                     st.rerun() 
                 else: st.error(f"⚠️ 설정 로드 실패: {loaded_sheets}"); st.stop()
             else: st.error("이름을 입력해주세요!")
@@ -413,7 +409,22 @@ def tab_test_ui():
             if not st.session_state.test_answered:
                 with sb.container():
                     with st.form(f"f_{st.session_state.test_q_count}"):
-                        u = st.text_input("영어 입력:"); 
+                        u = st.text_input("영어 입력:")
+                        
+                        # 🎯 오토포커스(자동 커서 활성화) 자바스크립트 주입!
+                        components.html(
+                            """
+                            <script>
+                            setTimeout(function() {
+                                const input = window.parent.document.querySelector('div[data-testid="stForm"] input[type="text"]');
+                                if (input) {
+                                    input.focus();
+                                }
+                            }, 100);
+                            </script>
+                            """, height=0, width=0
+                        )
+                        
                         if st.form_submit_button("확인"): submit_spell(u); st.rerun()
             else: sb.empty()
 
@@ -433,7 +444,6 @@ def tab_test_ui():
         st.session_state.auto_advance = False
         time.sleep(1.5); st.session_state.test_q_count += 1; prepare_question(); st.rerun()
 
-# 🎯 다중 페이지 노트북 UI
 @st.fragment
 def tab_notebook_ui():
     st.header("📓 나만의 다중 영어 노트")
@@ -453,7 +463,6 @@ def tab_notebook_ui():
         
     with c2:
         with st.popover("⚙️ 페이지 관리", use_container_width=True):
-            # 1. 새 페이지 추가
             new_title = st.text_input("새 페이지 이름", placeholder="예: 헷갈리는 숙어")
             if st.button("➕ 추가", use_container_width=True):
                 if new_title and new_title not in st.session_state.notebooks:
@@ -463,14 +472,12 @@ def tab_notebook_ui():
             
             st.divider()
             
-            # 🎯 2. [신규] 현재 페이지 이름 변경
             rename_title = st.text_input("현재 페이지 이름 변경", value=st.session_state.current_notebook_page)
             if st.button("✏️ 이름 변경", use_container_width=True):
                 if rename_title and rename_title != st.session_state.current_notebook_page and rename_title not in st.session_state.notebooks:
                     old_title = st.session_state.current_notebook_page
                     res = google_db.rename_user_notebook_page(st.session_state.username, old_title, rename_title)
                     if res is True:
-                        # 딕셔너리 정보 업데이트
                         content = st.session_state.notebooks.pop(old_title)
                         st.session_state.notebooks[rename_title] = content
                         st.session_state.current_notebook_page = rename_title
@@ -484,7 +491,6 @@ def tab_notebook_ui():
 
             st.divider()
             
-            # 3. 현재 페이지 삭제
             if st.button("🗑️ 현재 페이지 삭제", type="primary", use_container_width=True):
                 if len(st.session_state.notebooks) > 1:
                     del_title = st.session_state.current_notebook_page
