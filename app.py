@@ -32,7 +32,6 @@ st.markdown("""
         padding: 0.4rem 0.6rem !important; 
         white-space: nowrap !important; 
     }
-    /* 목록 탭 전용 버튼 (왼쪽 정렬) */
     .list-btn button {
         justify-content: flex-start !important;
         text-align: left !important;
@@ -117,6 +116,9 @@ if 'play_audio_b64' not in st.session_state:
     st.session_state.play_audio_b64 = None
 if 'play_audio_key' not in st.session_state:
     st.session_state.play_audio_key = "init"
+# 노트북용 기억력
+if 'notebook_content' not in st.session_state:
+    st.session_state.notebook_content = ""
 
 # ==========================================
 # 🧠 핵심 조수 함수
@@ -204,25 +206,28 @@ if not st.session_state.username:
                 username = user_input.strip()
                 st.session_state.username = username
                 
+                # 1. 데이터 로드
                 loaded_sheets = google_db.load_user_sheets(username)
                 if isinstance(loaded_sheets, list):
                     if loaded_sheets:
                         st.session_state.saved_sheets = loaded_sheets
                     else:
                         st.session_state.saved_sheets = ["맛있는 초등 필수 영단어 01-02"]
-                        res = google_db.save_user_sheets(username, st.session_state.saved_sheets)
-                        if res is not True: st.error(f"⚠️ 시트 목록 저장 실패: {res}"); st.stop()
+                        google_db.save_user_sheets(username, st.session_state.saved_sheets)
                     
                     target, direction = google_db.load_user_settings(username)
                     st.session_state.study_target = target
                     st.session_state.card_direction = direction
+                    
+                    # 노트북 로드
+                    st.session_state.notebook_content = google_db.load_user_notebook(username)
                     
                     st.rerun() 
                 else: st.error(f"⚠️ 설정 로드 실패: {loaded_sheets}"); st.stop()
             else: st.error("이름을 입력해주세요!")
     st.stop() 
 
-# 🎯 로그인 직후 자동 로드
+# 자동 로드
 if not st.session_state.all_words and st.session_state.saved_sheets:
     target = st.session_state.saved_sheets[0] 
     w, n, s, err = google_db.load_multiple_sheets([target], st.session_state.username)
@@ -327,18 +332,14 @@ def tab_list_ui():
                     google_db.add_word_to_sheet(st.session_state.current_sheet, wi, mi, ni); st.rerun()
     
     st.caption(f"총 {len(st.session_state.word_list)}개의 단어가 나열되어 있습니다. (틀린 단어 우선 정렬)")
-    st.divider() # 리스트 시작 전 깔끔한 선
+    st.divider()
     
-    # 🎯 가독성을 극대화한 새로운 리스트 디자인
     st.markdown('<div class="list-btn">', unsafe_allow_html=True)
-    
     for w in st.session_state.word_list:
         mean, note = st.session_state.words[w], st.session_state.notes.get(w, "").strip()
-        
         prefix = "⚠️ " if st.session_state.stats.get(w, {}).get("level", 0) == 0 and st.session_state.stats.get(w, {}).get("wrong", 0) > 0 else ""
         btn_text = f"{prefix}**{w}** &nbsp;&nbsp;|&nbsp;&nbsp; {mean}"
         
-        # 💡 설명이 있으면 우측에 작은 열을 만들어서 팝오버를 분리
         if note:
             col1, col2 = st.columns([85, 15])
             with col1:
@@ -354,9 +355,7 @@ def tab_list_ui():
                 cc1, cc2 = st.columns(2)
                 if cc1.button("💾 저장", key=f"sv_{w}", use_container_width=True): google_db.edit_word_in_sheet(st.session_state.current_sheet, w, nw, nm, nn); st.rerun()
                 if cc2.button("🗑️ 삭제", key=f"del_{w}", type="primary", use_container_width=True): google_db.delete_word_from_sheet(st.session_state.current_sheet, w); st.rerun()
-        
-        st.divider() # 🎯 단어 하나 끝날 때마다 깔끔한 가로 경계선 삽입!
-        
+        st.divider() 
     st.markdown('</div>', unsafe_allow_html=True)
     render_audio_player()
 
@@ -433,12 +432,38 @@ def tab_test_ui():
         st.session_state.auto_advance = False
         time.sleep(1.5); st.session_state.test_q_count += 1; prepare_question(); st.rerun()
 
+# 🎯 [신규] 노트북 탭 UI 렌더링 함수
+@st.fragment
+def tab_notebook_ui():
+    st.header("📓 나만의 비밀 영어 노트")
+    
+    with st.expander("✍️ 노트 수정하기", expanded=not st.session_state.notebook_content):
+        new_content = st.text_area("공부하다 궁금한 점이나 핵심 문법을 정리해 보세요. (마크다운 지원)", 
+                                   value=st.session_state.notebook_content, 
+                                   height=400,
+                                   help="여기에 적은 내용은 영구적으로 저장됩니다.")
+        if st.button("💾 노트북 저장", use_container_width=True, type="primary"):
+            res = google_db.save_user_notebook(st.session_state.username, new_content)
+            if res is True:
+                st.session_state.notebook_content = new_content
+                st.success("노트가 안전하게 저장되었습니다!")
+                time.sleep(0.5)
+                st.rerun()
+            else:
+                st.error(f"저장 실패: {res}")
+    
+    if st.session_state.notebook_content:
+        st.markdown("---")
+        st.markdown(st.session_state.notebook_content)
+    else:
+        st.info("아직 작성된 내용이 없습니다. 위 에디터에서 내용을 추가해 보세요!")
+
 # 렌더링 시작
 st.markdown('<div class="main-title">📖 Veha\'s English Web</div>', unsafe_allow_html=True)
 if not st.session_state.all_words:
     st.info("데이터를 불러오는 중입니다... 시트 이름을 확인해주세요.")
 else:
-    t1, t2, t3, t4 = st.tabs(["📋 목록", "📖 학습", "📝 시험", "📊 현황"])
+    t1, t2, t3, t4, t5 = st.tabs(["📋 목록", "📖 학습", "📝 시험", "📊 현황", "💻 노트북"])
     with t1: tab_list_ui()
     with t2: tab_study_ui()
     with t3: tab_test_ui()
@@ -448,3 +473,4 @@ else:
                 with st.container(border=True):
                     st.write(f"**{w}** : {st.session_state.words.get(w, '')}")
                     st.caption(f"⭕ {d.get('correct',0)} | ❌ {d.get('wrong',0)} &nbsp;&nbsp; 📈 Lv.{d.get('level',0)} &nbsp;&nbsp; 📅 복습: {d.get('next_review', '오늘')}")
+    with t5: tab_notebook_ui()
