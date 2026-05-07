@@ -19,7 +19,11 @@ def get_config_sheet():
     try:
         sh = client.open(config_name)
     except gspread.exceptions.SpreadsheetNotFound:
-        sh = client.create(config_name)
+        try:
+            sh = client.create(config_name)
+        except Exception as e:
+            # 💡 구글 드라이브 API가 안 켜져 있으면 여기서 에러를 뱉습니다!
+            raise Exception(f"설정 파일을 만들 권한이 없습니다. 구글 클라우드 콘솔에서 'Google Drive API'를 사용 설정해주세요! 상세오류: {e}")
     return sh.sheet1
 
 def load_user_sheets(username):
@@ -29,7 +33,8 @@ def load_user_sheets(username):
         for row in records:
             if row and row[0] == username:
                 return row[1:] 
-    except: pass
+    except Exception as e: 
+        return str(e) # 에러가 나면 숨기지 않고 문자로 반환!
     return []
 
 def save_user_sheets(username, sheet_list):
@@ -42,10 +47,11 @@ def save_user_sheets(username, sheet_list):
                 row_idx = i + 1
                 break
         if row_idx != -1:
-            ws.delete_rows(row_idx) 
+            ws.delete_row(row_idx) # 에러가 자주나는 delete_rows 대신 안전한 delete_row 사용!
         ws.append_row([username] + sheet_list)
         return True
-    except: return False
+    except Exception as e: 
+        return str(e)
 
 # ==========================================
 # 기존 단어장 & 통계 로직
