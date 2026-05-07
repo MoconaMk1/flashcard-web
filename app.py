@@ -11,7 +11,7 @@ import streamlit.components.v1 as components
 # 1. 브라우저 설정
 st.set_page_config(page_title="Veha's English", page_icon="📖", layout="centered")
 
-# 🎯 CSS 세팅
+# 🎯 모바일 화면 최적화 및 카드 크기 강제 고정 CSS
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"], .main {
@@ -24,6 +24,19 @@ st.markdown("""
         margin-bottom: 1rem;
         padding-top: 1rem;
     }
+    /* 플래시카드 거대화 디자인 (최신 Streamlit 대응) */
+    [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(.giant-card) button {
+        height: 220px !important;
+        border: 3px solid #2980B9 !important;
+        border-radius: 15px !important;
+        background-color: #f0f2f6 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: center !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important;
+    }
+    
     .stButton>button {
         border-radius: 10px;
         min-height: 2.8rem;
@@ -41,9 +54,6 @@ st.markdown("""
     .element-container, [data-testid="stElementContainer"] {
         transition: none !important;
         animation: none !important;
-    }
-    div[style*="opacity: 0"] {
-        display: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -63,9 +73,8 @@ if 'word_list' not in st.session_state:
     st.session_state.is_admin = False
     st.session_state.current_sheet = ""
     st.session_state.stats = {}
-    
+    # 기본 시트 이름 설정
     st.session_state.saved_sheets = ["맛있는 초등 필수 영단어 01-02"]
-    
     st.session_state.card_direction = "단어 ➔ 뜻" 
     st.session_state.test_active = False
     st.session_state.test_type = "객관식"
@@ -78,54 +87,13 @@ if 'word_list' not in st.session_state:
     st.session_state.test_msg = ""
     st.session_state.auto_advance = False 
     st.session_state.test_finished = False
-    
+
 if 'play_audio_b64' not in st.session_state:
     st.session_state.play_audio_b64 = None
 if 'play_audio_key' not in st.session_state:
     st.session_state.play_audio_key = "init"
 
-# ==========================================
-# 🛑 로그인 화면
-# ==========================================
-if not st.session_state.username:
-    st.markdown('<div class="main-title" style="text-align:center;">📖 Veha\'s English Web</div>', unsafe_allow_html=True)
-    st.write("---")
-    st.markdown("<h3 style='text-align: center;'>👋 환영합니다!</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: gray;'>본인의 이름을 입력하고 개인 맞춤형 학습을 시작하세요.</p>", unsafe_allow_html=True)
-    
-    with st.form("login_form"):
-        user_input = st.text_input("사용자 이름 (예: 홍길동)", placeholder="이름을 입력하세요")
-        submitted = st.form_submit_button("🚀 학습 시작하기", use_container_width=True)
-        
-        if submitted:
-            if user_input.strip() == "":
-                st.error("이름을 꼭 입력해주세요!")
-            else:
-                st.session_state.username = user_input.strip()
-                st.rerun() 
-    st.stop() 
-
-# ==========================================
-# 🎯 데이터 자동 불러오기
-# ==========================================
-if not st.session_state.all_words and st.session_state.saved_sheets:
-    try:
-        target_sheet = st.session_state.saved_sheets[0] 
-        w, n, s = google_db.load_multiple_sheets([target_sheet], st.session_state.username)
-        if w: 
-            st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
-            st.session_state.all_words = list(w.keys())
-            
-            today_str = datetime.now().strftime("%Y-%m-%d")
-            due = [word for word in st.session_state.all_words if not st.session_state.stats.get(word, {}).get("next_review", "") or st.session_state.stats.get(word, {}).get("next_review", "") <= today_str]
-            
-            st.session_state.due_words = due
-            st.session_state.word_list = due if due else st.session_state.all_words
-            st.session_state.current_sheet = target_sheet
-    except:
-        pass
-
-# --- 각종 조수 함수들 ---
+# 각종 함수
 def play_audio(text):
     tts = gTTS(text=text, lang='en')
     fp = io.BytesIO()
@@ -142,17 +110,8 @@ def render_audio_player():
         st.session_state.play_audio_b64 = None
 
 def render_giant_button(text, hint, color, key):
-    st.markdown(f"""<div id="anchor-{key}"></div><style>
-    [data-testid="stElementContainer"]:has(#anchor-{key}) + [data-testid="stElementContainer"] button,
-    .element-container:has(#anchor-{key}) + .element-container button {{
-        height: 220px !important; border: 3px solid {color} !important; border-radius: 15px !important;
-        background-color: #f0f2f6 !important; display: flex !important; flex-direction: column !important;
-        justify-content: center !important; align-items: center !important; box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important;
-    }}
-    [data-testid="stElementContainer"]:has(#anchor-{key}) + [data-testid="stElementContainer"] button p:nth-of-type(1),
-    .element-container:has(#anchor-{key}) + .element-container button p:nth-of-type(1) {{
-        font-size: clamp(2rem, 8vw, 2.8rem) !important; font-weight: bold !important; color: {color} !important;
-    }}</style>""", unsafe_allow_html=True)
+    # .giant-card 클래스를 넣어 CSS가 정확히 타겟팅하게 함
+    st.markdown('<div class="giant-card"></div>', unsafe_allow_html=True)
     return st.button(f"{text}\n\n{hint}", key=key, use_container_width=True)
 
 def calculate_next_review(level):
@@ -165,7 +124,6 @@ def update_stat(word, is_correct):
     if word not in st.session_state.stats:
         st.session_state.stats[word] = {"correct": 0, "wrong": 0, "level": 0, "next_review": ""}
     st.session_state.stats[word].setdefault("level", 0)
-
     if is_correct:
         st.session_state.stats[word]["correct"] += 1
         st.session_state.stats[word]["level"] += 1
@@ -208,69 +166,72 @@ def submit_spell(user_text):
         update_stat(current_w, False)
 
 # ==========================================
+# 🛑 로그인 화면
+# ==========================================
+if not st.session_state.username:
+    st.markdown('<div class="main-title" style="text-align:center;">📖 Veha\'s English Web</div>', unsafe_allow_html=True)
+    with st.form("login_form"):
+        user_input = st.text_input("사용자 이름 (본인의 통계 탭이 생성됩니다)", placeholder="이름 입력")
+        if st.form_submit_button("🚀 학습 시작하기", use_container_width=True):
+            if user_input.strip():
+                st.session_state.username = user_input.strip()
+                st.rerun()
+            else: st.error("이름을 입력해주세요!")
+    st.stop() 
+
+# 🎯 자동 불러오기
+if not st.session_state.all_words and st.session_state.saved_sheets:
+    target = st.session_state.saved_sheets[0]
+    w, n, s, err = google_db.load_multiple_sheets([target], st.session_state.username)
+    if w:
+        st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
+        st.session_state.all_words = list(w.keys())
+        today = datetime.now().strftime("%Y-%m-%d")
+        due = [word for word in st.session_state.all_words if not s.get(word, {}).get("next_review", "") or s.get(word, {}).get("next_review", "") <= today]
+        st.session_state.due_words, st.session_state.word_list = due, (due if due else st.session_state.all_words)
+        st.session_state.current_sheet = target
+    elif err:
+        st.error(err)
+
+# ==========================================
 # 📱 사이드바
 # ==========================================
 with st.sidebar:
     st.markdown(f"### 👤 **{st.session_state.username}**님")
     if st.button("🚪 로그아웃", use_container_width=True):
-        st.session_state.clear() 
-        st.rerun()
+        st.session_state.clear(); st.rerun()
     st.divider()
-
-    st.header("🗂️ 시트 관리")
-    new_sheet_name = st.text_input("새 시트 이름 추가", placeholder="예: 토익단어")
+    new_sheet = st.text_input("시트 이름 추가", placeholder="정확한 파일명 입력")
     c1, c2 = st.columns(2)
-    if c1.button("➕ 저장", use_container_width=True):
-        if new_sheet_name and new_sheet_name not in st.session_state.saved_sheets:
-            st.session_state.saved_sheets.append(new_sheet_name); st.rerun()
-    if c2.button("🗑️ 삭제", use_container_width=True):
-        if new_sheet_name in st.session_state.saved_sheets:
-            st.session_state.saved_sheets.remove(new_sheet_name); st.rerun()
+    if c1.button("➕ 저장"):
+        if new_sheet and new_sheet not in st.session_state.saved_sheets:
+            st.session_state.saved_sheets.append(new_sheet); st.rerun()
+    if c2.button("🗑️ 삭제"):
+        if new_sheet in st.session_state.saved_sheets:
+            st.session_state.saved_sheets.remove(new_sheet); st.rerun()
     st.divider()
-    
-    selected_sheets = st.multiselect("📂 불러올 시트 선택", options=st.session_state.saved_sheets, default=st.session_state.saved_sheets[:1])
-    if st.button("🚀 데이터 다시 불러오기", type="primary", use_container_width=True):
-        if selected_sheets:
-            with st.spinner("데이터를 분석하고 있습니다..."):
-                w, n, s = google_db.load_multiple_sheets(selected_sheets, st.session_state.username)
-                if w: 
-                    st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
-                    st.session_state.all_words = list(w.keys())
-                    
-                    today_str = datetime.now().strftime("%Y-%m-%d")
-                    due = [word for word in st.session_state.all_words if not st.session_state.stats.get(word, {}).get("next_review", "") or st.session_state.stats.get(word, {}).get("next_review", "") <= today_str]
-                            
-                    st.session_state.due_words = due
-                    st.session_state.word_list = due if due else st.session_state.all_words
-                    st.session_state.current_idx, st.session_state.current_sheet = 0, selected_sheets[0]
-                    st.session_state.test_active = False 
-                    st.success(f"로드 완료! 오늘 복습할 단어: {len(due)}개")
-                else:
-                    st.error("데이터를 찾을 수 없습니다. 구글 시트 탭 이름이 '단어장'인지 확인해주세요!")
-
+    sel_sheets = st.multiselect("📂 시트 선택", options=st.session_state.saved_sheets, default=st.session_state.saved_sheets[:1])
+    if st.button("🚀 데이터 불러오기", type="primary", use_container_width=True):
+        if sel_sheets:
+            w, n, s, err = google_db.load_multiple_sheets(sel_sheets, st.session_state.username)
+            if w:
+                st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
+                st.session_state.all_words = list(w.keys())
+                today = datetime.now().strftime("%Y-%m-%d")
+                due = [word for word in st.session_state.all_words if not s.get(word, {}).get("next_review", "") or s.get(word, {}).get("next_review", "") <= today]
+                st.session_state.due_words, st.session_state.word_list = due, (due if due else st.session_state.all_words)
+                st.session_state.current_idx, st.session_state.current_sheet = 0, sel_sheets[0]
+                st.session_state.test_active = False; st.success("로드 완료!")
+            elif err: st.error(err)
     st.divider()
-    st.write("🎯 학습 범위 선택")
-    study_target = st.radio("범위", ["오늘 복습 대상", "전체 단어장"], key="study_target", label_visibility="collapsed")
-    
-    if study_target == "오늘 복습 대상":
-        st.session_state.word_list = st.session_state.due_words if 'due_words' in st.session_state else []
-    else:
-        st.session_state.word_list = st.session_state.all_words if 'all_words' in st.session_state else []
-        
-    if st.session_state.current_idx >= len(st.session_state.word_list) and len(st.session_state.word_list) > 0:
-        st.session_state.current_idx = 0
-
-    st.divider()
-    st.write("🔄 카드 방향 설정")
-    st.radio("방향", ["단어 ➔ 뜻", "뜻 ➔ 단어"], key="card_direction", label_visibility="collapsed")
-    
-    st.divider()
-    st.header("🔐 관리자 모드")
-    admin_pw = st.text_input("비밀번호", type="password")
+    target = st.radio("학습 범위", ["오늘 복습 대상", "전체 단어장"], key="study_target")
+    st.session_state.word_list = st.session_state.due_words if target == "오늘 복습 대상" else st.session_state.all_words
+    st.radio("방향", ["단어 ➔ 뜻", "뜻 ➔ 단어"], key="card_direction")
+    admin_pw = st.text_input("관리자 비번", type="password")
     st.session_state.is_admin = (admin_pw == st.secrets["admin_password"])
 
 # ==========================================
-# 📱 메인 화면 렌더링
+# 📱 메인 화면
 # ==========================================
 @st.fragment
 def tab_list_ui():
@@ -288,22 +249,22 @@ def tab_list_ui():
                 with st.popover("💡 부가설명", use_container_width=True): st.info(note)
             if st.button(f"**{w}** : {mean}", key=f"bw_{w}", use_container_width=True): play_audio(w)
             if st.session_state.is_admin:
-                with st.expander("⚙️ 수정/삭제"):
-                    nw, nm, nn = st.text_input("단어", value=w, key=f"ew_{w}"), st.text_input("뜻", value=mean, key=f"em_{w}"), st.text_input("설명", value=note, key=f"en_{w}")
-                    ec1, ec2 = st.columns(2)
-                    if ec1.button("💾 저장", key=f"sv_{w}"): google_db.edit_word_in_sheet(st.session_state.current_sheet, w, nw, nm, nn); st.rerun()
-                    if ec2.button("🗑️ 삭제", key=f"del_{w}", type="primary"): google_db.delete_word_from_sheet(st.session_state.current_sheet, w); st.rerun()
+                with st.expander("⚙️ 수정"):
+                    nw, nm, nn = st.text_input("단", value=w, key=f"ew_{w}"), st.text_input("뜻", value=mean, key=f"em_{w}"), st.text_input("설", value=note, key=f"en_{w}")
+                    if st.button("💾 저장", key=f"sv_{w}"): google_db.edit_word_in_sheet(st.session_state.current_sheet, w, nw, nm, nn); st.rerun()
+                    if st.button("🗑️ 삭제", key=f"del_{w}", type="primary"): google_db.delete_word_from_sheet(st.session_state.current_sheet, w); st.rerun()
     render_audio_player()
 
 @st.fragment
 def tab_study_ui():
+    if not st.session_state.word_list: st.info("학습할 단어가 없습니다."); return
     current_word = st.session_state.word_list[st.session_state.current_idx]
     mean, note = st.session_state.words[current_word], st.session_state.notes.get(current_word, "")
     is_w2m = (st.session_state.card_direction == "단어 ➔ 뜻")
-    front_text, front_color = (current_word, "#2980B9") if not st.session_state.show_meaning else (mean, "#D35400")
-    if not is_w2m: front_text, front_color = (mean, "#2980B9") if not st.session_state.show_meaning else (current_word, "#D35400")
+    front_text = current_word if not st.session_state.show_meaning else mean
+    if not is_w2m: front_text = mean if not st.session_state.show_meaning else current_word
     
-    if render_giant_button(front_text, "👆 클릭하여 뒤집기", front_color, "m_card"):
+    if render_giant_button(front_text, "👆 클릭하여 뒤집기", "#2980B9", "m_card"):
         play_audio(current_word); st.session_state.show_meaning = not st.session_state.show_meaning; st.rerun()
     
     if note and st.session_state.show_meaning: st.info(f"💡 {note}")
@@ -324,15 +285,12 @@ def tab_test_ui():
             pool = list(st.session_state.word_list); random.shuffle(pool); st.session_state.test_queue = pool[:q_count]
             prepare_question(); st.rerun()
     elif st.session_state.test_finished:
-        st.balloons()
-        st.success(f"🎉 시험 종료! 최종 점수: {st.session_state.test_score} / {st.session_state.test_q_max}")
-        if st.button("처음으로 돌아가기", use_container_width=True):
-            st.session_state.test_active = False
-            st.rerun()
+        st.balloons(); st.success(f"🎉 시험 종료! 점수: {st.session_state.test_score}/{st.session_state.test_q_max}")
+        if st.button("처음으로 돌아가기", use_container_width=True): st.session_state.test_active = False; st.rerun()
     else:
         cp, cs = st.columns([7, 3])
         cp.progress(st.session_state.test_q_count / st.session_state.test_q_max)
-        if cs.button("⏹️ 중단", use_container_width=True): st.session_state.test_active = False; st.rerun()
+        if cs.button("⏹️ 중단"): st.session_state.test_active = False; st.rerun()
         
         current_w = st.session_state.test_queue[st.session_state.test_q_count]
         if st.session_state.test_type == "객관식":
@@ -357,29 +315,24 @@ def tab_test_ui():
             if "⭕" in st.session_state.test_msg: st.success(st.session_state.test_msg)
             else: st.error(st.session_state.test_msg)
             play_audio(current_w)
-            
             if st.session_state.test_q_count < st.session_state.test_q_max - 1:
                 st.session_state.auto_advance = True
             else:
-                with st.spinner("알고리즘 반영 및 자동 저장 중..."):
+                with st.spinner("자동 저장 중..."):
                     google_db.save_stats(st.session_state.current_sheet, st.session_state.stats, st.session_state.username)
-                time.sleep(1.5)
-                st.session_state.test_finished = True
-                st.rerun()
+                time.sleep(1.5); st.session_state.test_finished = True; st.rerun()
 
     render_audio_player()
     if st.session_state.auto_advance:
         st.session_state.auto_advance = False
         time.sleep(1.5); st.session_state.test_q_count += 1; prepare_question(); st.rerun()
 
+# 렌더링 시작
 st.markdown('<div class="main-title">📖 Veha\'s English Web</div>', unsafe_allow_html=True)
-
 if not st.session_state.all_words:
-    st.info("데이터를 불러오는 중입니다... (혹은 단어장이 비어있습니다)")
-elif not st.session_state.word_list:
-    st.success("🎉 오늘 복습할 단어를 모두 마쳤습니다! 사이드바에서 '전체 단어장'을 선택해 예습하세요.")
+    st.info("데이터를 불러오는 중입니다... 시트 이름을 확인해주세요.")
 else:
-    t1, t2, t3, t4 = st.tabs(["📋 단어 목록", "📖 기본 학습", "📝 시험 모드", "📊 현황판"])
+    t1, t2, t3, t4 = st.tabs(["📋 목록", "📖 학습", "📝 시험", "📊 현황"])
     with t1: tab_list_ui()
     with t2: tab_study_ui()
     with t3: tab_test_ui()
