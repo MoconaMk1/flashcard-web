@@ -85,12 +85,19 @@ def load_stats(sheet_name):
     return stats
 
 def save_stats(sheet_name, stats_dict):
-    worksheet = init_stats_sheet(sheet_name)
-    worksheet.clear() # 기존 데이터 지우고 새로 덮어쓰기
-    rows = [["단어", "맞춘횟수", "틀린횟수"]]
-    for w, data in stats_dict.items():
-        rows.append([w, data["correct"], data["wrong"]])
-    worksheet.update("A1", rows)
+    if not sheet_name: # 시트 이름이 없으면 중단
+        return False
+    try:
+        worksheet = init_stats_sheet(sheet_name)
+        worksheet.clear() 
+        rows = [["단어", "맞춘횟수", "틀린횟수"]]
+        for w, data in stats_dict.items():
+            rows.append([w, data.get("correct", 0), data.get("wrong", 0)])
+        worksheet.update("A1", rows)
+        return True
+    except Exception as e:
+        print(f"저장 중 오류 발생: {e}")
+        return False
 
 # 🎯 여러 시트의 데이터를 하나로 합쳐서 가져오는 업무
 def load_multiple_sheets(sheet_names):
