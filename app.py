@@ -11,7 +11,7 @@ import streamlit.components.v1 as components
 # 1. 브라우저 설정
 st.set_page_config(page_title="Veha's English", page_icon="📖", layout="centered")
 
-# 🎯 리얼 플래시카드 디자인 CSS 적용!
+# 🎯 리얼 플래시카드 & 텍스트 잘림 방지 CSS
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"], .main {
@@ -25,62 +25,55 @@ st.markdown("""
         padding-top: 1rem;
     }
     
-    /* 🎯 진짜 플래시카드 같은 질감과 입체감 부여 */
-    [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(.giant-card) button,
+    /* 🎯 일반 버튼(로드, 삭제, 정렬 등) 글자 두 줄 방지 */
+    .stButton>button {
+        border-radius: 10px;
+        min-height: 2.5rem;
+        height: auto !important;
+        font-size: 0.9rem !important; /* 글자 크기 약간 축소 */
+        padding: 0.2rem 0.4rem !important; /* 여백을 줄여서 한 줄에 들어가게 함 */
+        white-space: nowrap !important; /* 강제로 한 줄로 유지 */
+    }
+
+    /* 🎯 진짜 플래시카드 디자인 (입체감, 둥근 모서리, 그라데이션) */
     [data-testid="stElementContainer"]:has(.giant-card) button {
         height: 280px !important;
         border: 1px solid #e0e6ed !important;
         border-radius: 20px !important;
-        background: linear-gradient(145deg, #ffffff, #f8f9fa) !important;
+        background: linear-gradient(145deg, #ffffff, #f1f3f5) !important;
         display: flex !important;
         flex-direction: column !important;
         justify-content: center !important;
         align-items: center !important;
-        box-shadow: 0 12px 24px rgba(0,0,0,0.08), 0 4px 8px rgba(0,0,0,0.04) !important;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.04) !important;
         position: relative !important;
-        transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease !important;
+        transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+        white-space: normal !important; /* 카드는 글자가 기니까 줄바꿈 허용 */
     }
     
-    /* 카드 상단의 펀치홀(구멍) 느낌의 디자인 포인트 */
-    [data-testid="stElementContainer"]:has(.giant-card) button::before {
-        content: '';
-        position: absolute;
-        top: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 60px;
-        height: 6px;
-        background-color: #e2e8f0;
-        border-radius: 10px;
-        box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
-    }
-
+    /* 플래시카드 누를 때 쏙 들어가는 효과 */
     [data-testid="stElementContainer"]:has(.giant-card) button:active {
-        transform: scale(0.96) translateY(5px) !important;
-        box-shadow: 0 5px 10px rgba(0,0,0,0.1) !important;
+        transform: scale(0.97) translateY(4px) !important;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
     }
 
+    /* 플래시카드 안의 글자 크기 조정 */
     [data-testid="stElementContainer"]:has(.giant-card) button p:nth-of-type(1) {
-        font-size: clamp(2.5rem, 9vw, 3.5rem) !important;
+        font-size: clamp(2rem, 8vw, 3rem) !important;
         font-weight: 900 !important;
-        color: {color} !important;
         margin: 0 !important;
-        text-shadow: 1px 1px 0px rgba(255,255,255,1) !important;
     }
     
-    .stButton>button {
-        border-radius: 10px;
-        min-height: 2.8rem;
-        height: auto !important;
-        white-space: normal !important; 
-        text-align: left !important;
-        word-break: break-word !important; 
+    .stPopover > button {
+        border-radius: 10px !important;
+        border: 1px dashed #f39c12 !important;
+        color: #d35400 !important;
+        background-color: #fdfae6 !important;
     }
     .element-container, [data-testid="stElementContainer"] {
         transition: none !important;
         animation: none !important;
     }
-    div[style*="opacity: 0"] { display: none !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -119,7 +112,7 @@ if 'play_audio_key' not in st.session_state:
     st.session_state.play_audio_key = "init"
 
 # ==========================================
-# 🛑 로그인 화면 및 영구 데이터 로드
+# 🛑 로그인 화면
 # ==========================================
 if not st.session_state.username:
     st.markdown('<div class="main-title" style="text-align:center;">📖 Veha\'s English Web</div>', unsafe_allow_html=True)
@@ -130,7 +123,7 @@ if not st.session_state.username:
                 username = user_input.strip()
                 st.session_state.username = username
                 
-                # 🎯 로그인 성공 시 클라우드 DB에서 이 유저의 시트 목록을 가져옵니다.
+                # 로그인 시 영구 저장된 내 시트 목록 불러오기
                 loaded_sheets = google_db.load_user_sheets(username)
                 if loaded_sheets:
                     st.session_state.saved_sheets = loaded_sheets
@@ -141,7 +134,7 @@ if not st.session_state.username:
             else: st.error("이름을 입력해주세요!")
     st.stop() 
 
-# 자동 단어 로드
+# 🎯 자동 데이터 불러오기
 if not st.session_state.all_words and st.session_state.saved_sheets:
     target = st.session_state.saved_sheets[0] 
     w, n, s, err = google_db.load_multiple_sheets([target], st.session_state.username)
@@ -152,8 +145,6 @@ if not st.session_state.all_words and st.session_state.saved_sheets:
         due = [word for word in st.session_state.all_words if not s.get(word, {}).get("next_review", "") or s.get(word, {}).get("next_review", "") <= today_str]
         st.session_state.due_words, st.session_state.word_list = due, (due if due else st.session_state.all_words)
         st.session_state.current_sheet = target
-    elif err:
-        pass # UI에 에러는 띄우지 않고 대기
 
 # --- 조수 함수들 ---
 def play_audio(text):
@@ -172,8 +163,8 @@ def render_audio_player():
         st.session_state.play_audio_b64 = None
 
 def render_giant_button(text, hint, color, key):
-    # CSS에서 {color}를 인식하도록 동적으로 style 덮어쓰기
-    st.markdown(f'<style>[data-testid="stElementContainer"]:has(#anchor-{key}) + [data-testid="stElementContainer"] button p:nth-of-type(1) {{ color: {color} !important; }}</style>', unsafe_allow_html=True)
+    # 글자 색상 입히기 & .giant-card 클래스 부여
+    st.markdown(f'<style>[data-testid="stElementContainer"]:has(#anchor-{key}) button p:nth-of-type(1) {{ color: {color} !important; }}</style>', unsafe_allow_html=True)
     st.markdown(f'<div id="anchor-{key}" class="giant-card"></div>', unsafe_allow_html=True)
     return st.button(f"{text}\n\n{hint}", key=key, use_container_width=True)
 
@@ -222,7 +213,7 @@ def submit_spell(user_text):
         st.session_state.test_msg = f"❌ 틀렸습니다! (스펠링: {current_w})"; update_stat(current_w, False)
 
 # ==========================================
-# 📱 사이드바 (개편된 UI)
+# 📱 사이드바
 # ==========================================
 with st.sidebar:
     st.markdown(f"### 👤 **{st.session_state.username}**님")
@@ -231,7 +222,7 @@ with st.sidebar:
     st.divider()
 
     st.header("🗂️ 내 단어장 관리")
-    new_sheet = st.text_input("새 시트 추가", placeholder="구글 시트 파일명 입력")
+    new_sheet = st.text_input("새 시트 추가", placeholder="파일명 입력")
     if st.button("➕ 목록에 추가", use_container_width=True):
         if new_sheet and new_sheet not in st.session_state.saved_sheets:
             st.session_state.saved_sheets.append(new_sheet)
@@ -239,27 +230,22 @@ with st.sidebar:
             st.rerun()
             
     st.write("---")
-    st.write("✅ **등록된 시트 선택 및 정렬**")
+    st.write("✅ **시트 선택 및 정렬**")
     
-    # 🎯 [신규] 체크박스 및 순서 입력 UI
     selected_for_action = []
     updated_order = {}
     
-    c_h1, c_h2 = st.columns([7, 3])
-    c_h1.caption("선택 / 시트명")
-    c_h2.caption("순서")
-    
     for i, sheet in enumerate(st.session_state.saved_sheets):
-        col1, col2 = st.columns([7, 3])
-        chk = col1.checkbox(sheet, key=f"chk_{sheet}")
+        c1, c2 = st.columns([7, 3])
+        chk = c1.checkbox(sheet, key=f"chk_{sheet}")
         if chk: selected_for_action.append(sheet)
-        order = col2.number_input("순서", value=i+1, min_value=1, key=f"ord_{sheet}", label_visibility="collapsed")
+        order = c2.number_input("순서", value=i+1, min_value=1, key=f"ord_{sheet}", label_visibility="collapsed")
         updated_order[sheet] = order
 
     c_load, c_del, c_sort = st.columns(3)
-    if c_load.button("🚀 로드", use_container_width=True):
+    if c_load.button("🚀 로드"):
         if selected_for_action:
-            with st.spinner("단어를 로드 중입니다..."):
+            with st.spinner("단어 로드 중..."):
                 w, n, s, err = google_db.load_multiple_sheets(selected_for_action, st.session_state.username)
                 if w: 
                     st.session_state.words, st.session_state.notes, st.session_state.stats = w, n, s
@@ -269,19 +255,18 @@ with st.sidebar:
                     st.session_state.due_words, st.session_state.word_list = due, (due if due else st.session_state.all_words)
                     st.session_state.current_idx, st.session_state.current_sheet = 0, selected_for_action[0]
                     st.session_state.test_active = False 
-                    st.success(f"로드 완료! 복습 단어: {len(due)}개")
+                    st.success(f"로드 완료!")
                 elif err: st.error(err)
-        else:
-            st.warning("불러올 시트를 체크해주세요.")
+        else: st.warning("시트를 체크해주세요.")
             
-    if c_del.button("🗑️ 삭제", use_container_width=True):
+    if c_del.button("🗑️ 삭제"):
         if selected_for_action:
             for s in selected_for_action:
                 st.session_state.saved_sheets.remove(s)
             google_db.save_user_sheets(st.session_state.username, st.session_state.saved_sheets)
             st.rerun()
 
-    if c_sort.button("↕️ 정렬", use_container_width=True):
+    if c_sort.button("↕️ 정렬"):
         st.session_state.saved_sheets.sort(key=lambda x: updated_order[x])
         google_db.save_user_sheets(st.session_state.username, st.session_state.saved_sheets)
         st.rerun()
@@ -294,7 +279,7 @@ with st.sidebar:
     st.session_state.is_admin = (admin_pw == st.secrets["admin_password"])
 
 # ==========================================
-# 📱 메인 화면 렌더링
+# 📱 메인 화면
 # ==========================================
 @st.fragment
 def tab_list_ui():
