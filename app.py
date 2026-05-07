@@ -122,13 +122,36 @@ if 'current_notebook_page' not in st.session_state:
     st.session_state.current_notebook_page = ""
 
 # ==========================================
-# 🧠 핵심 조수 함수
+# 🧠 핵심 조수 함수 (정렬 알고리즘 완벽 진화!)
 # ==========================================
 def get_sorted_full_list(all_words_list, stats_dict):
+    """
+    🎯 1순위: 틀린 단어 (레벨0 이면서 오답이 있는 것)
+    🎯 2순위: 한 번도 배우지 않은 새 단어
+    🎯 3순위: 복습 대상 (레벨이 낮고, 복습일이 옛날일수록 우선 배치!)
+    """
     def sort_key(w):
         stat = stats_dict.get(w, {})
-        priority = 0 if stat.get("level", 0) == 0 and stat.get("wrong", 0) > 0 else 1
-        return (priority, all_words_list.index(w))
+        correct = stat.get("correct", 0)
+        wrong = stat.get("wrong", 0)
+        level = stat.get("level", 0)
+        next_review = stat.get("next_review", "")
+        
+        # 1. 어떤 그룹에 속하는지 판별 (0이 가장 먼저 나옴)
+        if level == 0 and wrong > 0:
+            group = 0  # 1순위: 틀린 단어
+        elif correct == 0 and wrong == 0:
+            group = 1  # 2순위: 새 단어
+        else:
+            group = 2  # 3순위: 복습 단어
+            
+        # 2. 날짜가 빈칸이면 가장 옛날(1970년)로 취급해서 우선순위 높임
+        if not next_review:
+            next_review = "1970-01-01"
+            
+        # 3. 이 순서대로 줄을 세웁니다: [그룹] -> [레벨 낮은순] -> [다음복습일 옛날순] -> [맞춘횟수 적은순]
+        return (group, level, next_review, correct, all_words_list.index(w))
+
     return sorted(all_words_list, key=sort_key)
 
 def play_audio(text):
@@ -328,13 +351,22 @@ def tab_list_ui():
                 if st.form_submit_button("등록"):
                     google_db.add_word_to_sheet(st.session_state.current_sheet, wi, mi, ni); st.rerun()
     
-    st.caption(f"총 {len(st.session_state.word_list)}개의 단어가 나열되어 있습니다. (틀린 단어 우선 정렬)")
+    st.caption(f"총 {len(st.session_state.word_list)}개의 단어가 나열되어 있습니다. (틀린 단어 ➔ 미학습 단어 ➔ 복습 급한 단어 순)")
     st.divider()
     
     st.markdown('<div class="list-btn">', unsafe_allow_html=True)
     for w in st.session_state.word_list:
         mean, note = st.session_state.words[w], st.session_state.notes.get(w, "").strip()
-        prefix = "⚠️ " if st.session_state.stats.get(w, {}).get("level", 0) == 0 and st.session_state.stats.get(w, {}).get("wrong", 0) > 0 else ""
+        
+        # 목록에서 틀린 단어(레벨0+오답), 새 단어(정답0+오답0)를 구분해주는 아이콘 추가!
+        stat = st.session_state.stats.get(w, {})
+        if stat.get("level", 0) == 0 and stat.get("wrong", 0) > 0:
+            prefix = "⚠️ "  # 틀린 단어
+        elif stat.get("correct", 0) == 0 and stat.get("wrong", 0) == 0:
+            prefix = "🆕 "  # 새 단어
+        else:
+            prefix = "✅ "  # 맞춘 적 있는 단어
+            
         btn_text = f"{prefix}**{w}** &nbsp;&nbsp;|&nbsp;&nbsp; {mean}"
         
         if note:
@@ -385,7 +417,6 @@ def tab_test_ui():
             st.session_state.test_active, st.session_state.test_type = True, test_type
             st.session_state.test_q_max, st.session_state.test_q_count, st.session_state.test_score = q_count, 0, 0
             
-            # 🎯 [수정됨] 무작위 출제 방식을 버리고 학습 탭과 동일하게 '틀린 단어 우선 정렬' 순서로 출제!
             st.session_state.test_queue = list(st.session_state.word_list)[:q_count]
             
             prepare_question(); st.rerun()
@@ -414,7 +445,6 @@ def tab_test_ui():
                     with st.form(f"f_{st.session_state.test_q_count}"):
                         u = st.text_input("영어 입력:")
                         
-                        # 🎯 오토포커스 유지
                         components.html(
                             """
                             <script>
