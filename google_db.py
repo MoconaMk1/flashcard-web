@@ -12,7 +12,7 @@ def get_gspread_client():
 client = get_gspread_client()
 
 # ==========================================
-# 🎯 [기존] 시트 목록 영구 저장소
+# 🎯 시트 목록 영구 저장소
 # ==========================================
 def get_config_sheet():
     config_name = "시트 영구 저장소"
@@ -50,7 +50,7 @@ def save_user_sheets(username, sheet_list):
         return str(e)
 
 # ==========================================
-# 🎯 [기존] 학습 범위 & 카드 방향 설정 저장소
+# 🎯 학습 범위 & 카드 방향 설정 저장소
 # ==========================================
 def get_settings_sheet():
     config_name = "시트 영구 저장소"
@@ -94,45 +94,62 @@ def save_user_settings(username, study_target, card_direction):
         return str(e)
 
 # ==========================================
-# 🎯 [신규] 노트북(참고용 내용) 저장소
+# 🎯 [신규] '다중 페이지' 노트북 저장소!
 # ==========================================
 def get_notebook_sheet():
     config_name = "시트 영구 저장소"
     try:
         sh = client.open(config_name)
         try:
-            worksheet = sh.worksheet("노트북")
+            # 안전하게 새로운 이름의 탭을 만듭니다. (3칸짜리)
+            worksheet = sh.worksheet("노트북_다중")
         except gspread.exceptions.WorksheetNotFound:
-            worksheet = sh.add_worksheet(title="노트북", rows="1000", cols="2")
-            worksheet.append_row(["사용자", "내용"])
+            worksheet = sh.add_worksheet(title="노트북_다중", rows="1000", cols="3")
+            worksheet.append_row(["사용자", "페이지제목", "내용"])
         return worksheet
     except gspread.exceptions.SpreadsheetNotFound:
         raise Exception(f"'{config_name}' 파일을 찾을 수 없습니다.")
 
-def load_user_notebook(username):
+def load_user_notebooks(username):
     try:
         ws = get_notebook_sheet()
         records = ws.get_all_values()
+        notebooks = {}
         for row in records[1:]:
-            if row and row[0] == username:
-                return row[1]
+            if row and len(row) >= 3 and row[0] == username:
+                notebooks[row[1]] = row[2] # 딕셔너리 형태로 여러 페이지를 담아옴
+        return notebooks
     except Exception:
-        pass
-    return ""
+        return {}
 
-def save_user_notebook(username, content):
+def save_user_notebook_page(username, page_title, content):
     try:
         ws = get_notebook_sheet()
         records = ws.get_all_values()
         row_idx = -1
         for i, row in enumerate(records):
-            if row and row[0] == username:
+            if row and len(row) >= 2 and row[0] == username and row[1] == page_title:
                 row_idx = i + 1
                 break
         if row_idx != -1:
-            ws.update_cell(row_idx, 2, content)
+            ws.update_cell(row_idx, 3, content) # 기존 페이지는 내용만 덮어쓰기
         else:
-            ws.append_row([username, content])
+            ws.append_row([username, page_title, content]) # 새 페이지는 새로 추가
+        return True
+    except Exception as e:
+        return str(e)
+
+def delete_user_notebook_page(username, page_title):
+    try:
+        ws = get_notebook_sheet()
+        records = ws.get_all_values()
+        row_idx = -1
+        for i, row in enumerate(records):
+            if row and len(row) >= 2 and row[0] == username and row[1] == page_title:
+                row_idx = i + 1
+                break
+        if row_idx != -1:
+            ws.delete_rows(row_idx) # 해당 페이지(행) 아예 삭제
         return True
     except Exception as e:
         return str(e)
