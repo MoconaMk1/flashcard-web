@@ -82,7 +82,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 앱의 기억력 세팅 (초기값)
+# 2. 앱의 기억력 세팅
 if 'username' not in st.session_state:
     st.session_state.username = None 
 if 'word_list' not in st.session_state:
@@ -121,21 +121,40 @@ if 'notebooks' not in st.session_state:
     st.session_state.notebooks = {}
 if 'current_notebook_page' not in st.session_state:
     st.session_state.current_notebook_page = ""
-
-# 🎯 효과음 전용 기억력 세팅
 if 'sfx_audio_b64' not in st.session_state:
     st.session_state.sfx_audio_b64 = None
 if 'sfx_audio_key' not in st.session_state:
     st.session_state.sfx_audio_key = "sfx_init"
 
 # ==========================================
-# 🧠 핵심 조수 함수
+# 🧠 핵심 조수 함수 (완벽한 스파르타 정렬!)
 # ==========================================
 def get_sorted_full_list(all_words_list, stats_dict):
+    """
+    🎯 0순위: 틀린 단어 (레벨0 이면서 오답이 있는 것)
+    🎯 1순위: 한 번도 배우지 않은 새 단어 (정답도 오답도 없음)
+    🎯 2순위: 복습 대상 (맞춘 적 있음) -> 레벨 낮은순 -> 복습일 옛날순 -> 맞춘횟수 적은순
+    """
     def sort_key(w):
         stat = stats_dict.get(w, {})
-        priority = 0 if stat.get("level", 0) == 0 and stat.get("wrong", 0) > 0 else 1
-        return (priority, all_words_list.index(w))
+        correct = stat.get("correct", 0)
+        wrong = stat.get("wrong", 0)
+        level = stat.get("level", 0)
+        next_review = stat.get("next_review", "")
+        
+        # 1. 철저한 계급 판별
+        if level == 0 and wrong > 0:
+            group = 0  # 0순위: 긴급 오답
+        elif correct == 0 and wrong == 0:
+            group = 1  # 1순위: 완전 신규
+        else:
+            group = 2  # 2순위: 일반 복습
+            
+        if not next_review:
+            next_review = "1970-01-01"
+            
+        return (group, level, next_review, correct, all_words_list.index(w))
+
     return sorted(all_words_list, key=sort_key)
 
 def play_audio(text):
@@ -153,13 +172,11 @@ def render_audio_player():
         components.html(html, width=0, height=0)
         st.session_state.play_audio_b64 = None
 
-# 🎯 효과음(SFX) 재생 함수
 def play_sfx(is_correct):
     base_name = "correct" if is_correct else "wrong"
     file_path = None
     mime_type = "audio/mp3"
     
-    # mp3인지 wav인지 확인해서 장전
     if os.path.exists(f"{base_name}.mp3"):
         file_path = f"{base_name}.mp3"
     elif os.path.exists(f"{base_name}.wav"):
@@ -210,10 +227,9 @@ def prepare_question():
         correct_m = st.session_state.words[current_w]
         pool_m = [st.session_state.words[w] for w in st.session_state.all_words if w != current_w]
         options = random.sample(pool_m, min(3, len(pool_m))) + [correct_m]
-        random.shuffle(options)
+        random.shuffle(options) # 객관식의 '선택지 번호'만 섞습니다.
         st.session_state.test_options = options
 
-# 🎯 시험 제출 시 정답/오답 효과음 쏘기!
 def submit_mcq(option):
     st.session_state.test_answered = True
     current_w = st.session_state.test_queue[st.session_state.test_q_count]
@@ -424,11 +440,17 @@ def tab_test_ui():
         st.session_state.test_finished = False
         test_type = st.selectbox("시험 방식", ["객관식", "스펠링"])
         q_count = st.number_input("문제 수", min_value=1, value=min(10, len(st.session_state.word_list)))
+        
         if st.button("🚀 시작", type="primary", use_container_width=True):
             st.session_state.test_active, st.session_state.test_type = True, test_type
             st.session_state.test_q_max, st.session_state.test_q_count, st.session_state.test_score = q_count, 0, 0
+            
+            # 🎯 [대수술 완료] 랜덤 섞기(random.shuffle) 절대 금지!
+            # 무조건 학습 탭에서 정렬해둔 (오답->신규->복습) 리스트 순서 그대로 잘라서 가져옵니다.
             st.session_state.test_queue = list(st.session_state.word_list)[:q_count]
+            
             prepare_question(); st.rerun()
+            
     elif st.session_state.test_finished:
         st.balloons(); st.success(f"🎉 시험 종료! 점수: {st.session_state.test_score}/{st.session_state.test_q_max}")
         if st.button("처음으로 돌아가기", use_container_width=True): st.session_state.test_active = False; st.rerun()
@@ -478,7 +500,6 @@ def tab_test_ui():
                     google_db.save_stats(st.session_state.current_sheet, st.session_state.stats, st.session_state.username)
                 time.sleep(1.5); st.session_state.test_finished = True; st.rerun()
 
-    # 🎯 발음 오디오와 정답/오답 효과음을 동시에 렌더링!
     render_audio_player()
     render_sfx_player()
     
