@@ -295,6 +295,9 @@ if not st.session_state.all_words and st.session_state.saved_sheets:
 with st.sidebar:
     st.markdown(f"### 👤 **{st.session_state.username}**님")
     if st.button("🚪 로그아웃", use_container_width=True):
+        # 🎯 로그아웃 버튼 누르면, 나가기 전에 통계부터 구글 시트에 강제 저장!
+        if st.session_state.current_sheet and st.session_state.stats:
+            google_db.save_stats(st.session_state.current_sheet, st.session_state.stats, st.session_state.username)
         st.session_state.clear(); st.rerun()
     st.divider()
 
