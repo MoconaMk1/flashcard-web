@@ -28,7 +28,8 @@ def load_user_sheets(username):
         records = ws.get_all_values()
         for row in records:
             if row and row[0] == username:
-                return row[1:] 
+                # 🎯 빈 칸(이름 없는 시트)은 무시하고 진짜 이름이 있는 시트만 가져오기
+                return [sheet for sheet in row[1:] if sheet.strip()] 
     except Exception as e: 
         return str(e) 
     return []
