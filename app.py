@@ -116,9 +116,12 @@ if 'play_audio_b64' not in st.session_state:
     st.session_state.play_audio_b64 = None
 if 'play_audio_key' not in st.session_state:
     st.session_state.play_audio_key = "init"
-# 노트북용 기억력
-if 'notebook_content' not in st.session_state:
-    st.session_state.notebook_content = ""
+
+# 🎯 [수정됨] 다중 노트북용 딕셔너리 세팅
+if 'notebooks' not in st.session_state:
+    st.session_state.notebooks = {}
+if 'current_notebook_page' not in st.session_state:
+    st.session_state.current_notebook_page = ""
 
 # ==========================================
 # 🧠 핵심 조수 함수
@@ -218,7 +221,8 @@ if not st.session_state.username:
                     st.session_state.study_target = target
                     st.session_state.card_direction = direction
                     
-                    st.session_state.notebook_content = google_db.load_user_notebook(username)
+                    # 🎯 다중 노트북 딕셔너리 로드
+                    st.session_state.notebooks = google_db.load_user_notebooks(username)
                     
                     st.rerun() 
                 else: st.error(f"⚠️ 설정 로드 실패: {loaded_sheets}"); st.stop()
@@ -430,33 +434,76 @@ def tab_test_ui():
         st.session_state.auto_advance = False
         time.sleep(1.5); st.session_state.test_q_count += 1; prepare_question(); st.rerun()
 
-# 🎯 노트북 UI (마크다운 엔터 무시 버그 완벽 수정!)
+# 🎯 [신규] 다중 페이지 노트북 UI
 @st.fragment
 def tab_notebook_ui():
-    st.header("📓 나만의 비밀 영어 노트")
+    st.header("📓 나만의 다중 영어 노트")
     
-    with st.expander("✍️ 노트 수정하기", expanded=not st.session_state.notebook_content):
+    # 1. 페이지 목록 체크 및 초기화
+    page_titles = list(st.session_state.notebooks.keys())
+    if not page_titles:
+        st.session_state.notebooks["기본 노트"] = ""
+        page_titles = ["기본 노트"]
+        st.session_state.current_notebook_page = "기본 노트"
+    elif st.session_state.current_notebook_page not in page_titles:
+        st.session_state.current_notebook_page = page_titles[0]
+        
+    # 2. 페이지 전환 및 관리 패널
+    c1, c2 = st.columns([7, 3])
+    with c1:
+        # 가로형 라디오 버튼으로 깔끔한 탭 전환 효과!
+        selected_page = st.radio("📑 열람할 노트 선택", page_titles, horizontal=True, label_visibility="collapsed")
+        st.session_state.current_notebook_page = selected_page
+        
+    with c2:
+        with st.popover("⚙️ 페이지 관리", use_container_width=True):
+            new_title = st.text_input("새 페이지 이름", placeholder="예: 헷갈리는 숙어")
+            if st.button("➕ 추가", use_container_width=True):
+                if new_title and new_title not in st.session_state.notebooks:
+                    st.session_state.notebooks[new_title] = ""
+                    st.session_state.current_notebook_page = new_title
+                    st.rerun()
+            st.divider()
+            if st.button("🗑️ 현재 페이지 삭제", type="primary", use_container_width=True):
+                if len(st.session_state.notebooks) > 1:
+                    del_title = st.session_state.current_notebook_page
+                    res = google_db.delete_user_notebook_page(st.session_state.username, del_title)
+                    if res is True:
+                        del st.session_state.notebooks[del_title]
+                        st.session_state.current_notebook_page = list(st.session_state.notebooks.keys())[0]
+                        st.success("삭제 완료!")
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.error(f"삭제 실패: {res}")
+                else:
+                    st.warning("최소 1개의 페이지는 남겨두어야 합니다.")
+
+    # 3. 현재 선택된 페이지 에디터 및 출력
+    current_content = st.session_state.notebooks[st.session_state.current_notebook_page]
+    
+    with st.expander(f"✍️ [{st.session_state.current_notebook_page}] 내용 쓰기", expanded=not current_content):
         new_content = st.text_area("공부하다 궁금한 점이나 핵심 문법을 정리해 보세요.", 
-                                   value=st.session_state.notebook_content, 
-                                   height=400,
-                                   help="여기에 적은 내용은 영구적으로 저장됩니다.")
-        if st.button("💾 노트북 저장", use_container_width=True, type="primary"):
-            res = google_db.save_user_notebook(st.session_state.username, new_content)
+                                   value=current_content, 
+                                   height=300)
+        if st.button("💾 이 페이지 저장", use_container_width=True, type="primary"):
+            res = google_db.save_user_notebook_page(st.session_state.username, st.session_state.current_notebook_page, new_content)
             if res is True:
-                st.session_state.notebook_content = new_content
+                st.session_state.notebooks[st.session_state.current_notebook_page] = new_content
                 st.success("노트가 안전하게 저장되었습니다!")
                 time.sleep(0.5)
                 st.rerun()
             else:
                 st.error(f"저장 실패: {res}")
     
-    if st.session_state.notebook_content:
+    if current_content:
         st.markdown("---")
-        # 🎯 핵심: 엔터 한 번(\n)을 마크다운 줄바꿈 규칙(스페이스바 2개 + \n)으로 강제 변환!
-        display_content = st.session_state.notebook_content.replace('\n', '  \n')
+        st.subheader(f"🏷️ {st.session_state.current_notebook_page}")
+        # 엔터를 마크다운 줄바꿈 규칙으로 자동 변환해주는 핵심 코드!
+        display_content = current_content.replace('\n', '  \n')
         st.markdown(display_content)
     else:
-        st.info("아직 작성된 내용이 없습니다. 위 에디터에서 내용을 추가해 보세요!")
+        st.info("아직 작성된 내용이 없습니다. 위 에디터를 열어 필기를 시작해 보세요!")
 
 # 렌더링 시작
 st.markdown('<div class="main-title">📖 Veha\'s English Web</div>', unsafe_allow_html=True)
