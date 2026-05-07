@@ -384,7 +384,10 @@ def tab_test_ui():
         if st.button("🚀 시작", type="primary", use_container_width=True):
             st.session_state.test_active, st.session_state.test_type = True, test_type
             st.session_state.test_q_max, st.session_state.test_q_count, st.session_state.test_score = q_count, 0, 0
-            pool = list(st.session_state.word_list); random.shuffle(pool); st.session_state.test_queue = pool[:q_count]
+            
+            # 🎯 [수정됨] 무작위 출제 방식을 버리고 학습 탭과 동일하게 '틀린 단어 우선 정렬' 순서로 출제!
+            st.session_state.test_queue = list(st.session_state.word_list)[:q_count]
+            
             prepare_question(); st.rerun()
     elif st.session_state.test_finished:
         st.balloons(); st.success(f"🎉 시험 종료! 점수: {st.session_state.test_score}/{st.session_state.test_q_max}")
@@ -411,7 +414,7 @@ def tab_test_ui():
                     with st.form(f"f_{st.session_state.test_q_count}"):
                         u = st.text_input("영어 입력:")
                         
-                        # 🎯 오토포커스(자동 커서 활성화) 자바스크립트 주입!
+                        # 🎯 오토포커스 유지
                         components.html(
                             """
                             <script>
