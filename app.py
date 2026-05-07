@@ -11,7 +11,6 @@ import streamlit.components.v1 as components
 # 1. 브라우저 설정
 st.set_page_config(page_title="Veha's English", page_icon="📖", layout="centered")
 
-# 🎯 일반 UI & 플래시카드 공통 디자인 세팅 (맨 위로 이동시켜서 글자 노출 원천 차단!)
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"], .main {
@@ -24,8 +23,6 @@ st.markdown("""
         margin-bottom: 1rem;
         padding-top: 1rem;
     }
-    
-    /* 🎯 일반 버튼(로드, 삭제, 정렬 등) 글자 깨짐 방지 */
     .stButton>button {
         border-radius: 10px;
         min-height: 2.5rem;
@@ -34,15 +31,12 @@ st.markdown("""
         padding: 0.3rem 0.5rem !important; 
         white-space: nowrap !important; 
     }
-
     .stPopover > button {
         border-radius: 10px !important;
         border: 1px dashed #f39c12 !important;
         color: #d35400 !important;
         background-color: #fdfae6 !important;
     }
-    
-    /* 🎯 진짜 플래시카드 공통 디자인 (입체감, 둥근 모서리, 그라데이션) */
     [data-testid="stElementContainer"]:has(.giant-card-anchor) + [data-testid="stElementContainer"] button,
     .element-container:has(.giant-card-anchor) + .element-container button {
         height: 280px !important;
@@ -57,30 +51,23 @@ st.markdown("""
         transition: transform 0.15s ease, box-shadow 0.15s ease !important;
         white-space: normal !important;
     }
-    
-    /* 누를 때 쏙 들어가는 효과 */
     [data-testid="stElementContainer"]:has(.giant-card-anchor) + [data-testid="stElementContainer"] button:active,
     .element-container:has(.giant-card-anchor) + .element-container button:active {
         transform: scale(0.97) translateY(4px) !important;
         box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
     }
-
-    /* 플래시카드 안의 텍스트 크기 */
     [data-testid="stElementContainer"]:has(.giant-card-anchor) + [data-testid="stElementContainer"] button p:nth-of-type(1),
     .element-container:has(.giant-card-anchor) + .element-container button p:nth-of-type(1) {
         font-size: clamp(2.5rem, 8vw, 3.5rem) !important;
         font-weight: 900 !important;
         margin: 0 !important;
     }
-    
-    /* 서브 힌트 텍스트 크기 */
     [data-testid="stElementContainer"]:has(.giant-card-anchor) + [data-testid="stElementContainer"] button p:nth-of-type(2),
     .element-container:has(.giant-card-anchor) + .element-container button p:nth-of-type(2) {
         color: #888 !important;
         font-size: 1rem !important;
         margin-top: 15px !important;
     }
-
     .element-container, [data-testid="stElementContainer"] {
         transition: none !important;
         animation: none !important;
@@ -135,13 +122,21 @@ if not st.session_state.username:
                 username = user_input.strip()
                 st.session_state.username = username
                 
+                # 💡 리스트면 성공, 문자열이면 에러입니다.
                 loaded_sheets = google_db.load_user_sheets(username)
-                if loaded_sheets:
-                    st.session_state.saved_sheets = loaded_sheets
+                if isinstance(loaded_sheets, list):
+                    if loaded_sheets:
+                        st.session_state.saved_sheets = loaded_sheets
+                    else:
+                        st.session_state.saved_sheets = ["맛있는 초등 필수 영단어 01-02"]
+                        res = google_db.save_user_sheets(username, st.session_state.saved_sheets)
+                        if res is not True:
+                            st.error(f"⚠️ 설정 파일 생성 실패! 원인: {res}")
+                            st.stop()
+                    st.rerun() 
                 else:
-                    st.session_state.saved_sheets = ["맛있는 초등 필수 영단어 01-02"]
-                    google_db.save_user_sheets(username, st.session_state.saved_sheets)
-                st.rerun() 
+                    st.error(f"⚠️ 설정 로드 실패! 원인: {loaded_sheets}")
+                    st.stop()
             else: st.error("이름을 입력해주세요!")
     st.stop() 
 
@@ -172,7 +167,6 @@ def render_audio_player():
         components.html(html, width=0, height=0)
         st.session_state.play_audio_b64 = None
 
-# 🎯 [버그 해결] 글자가 노출되지 않도록 코드를 한 줄로 압축했습니다!
 def render_giant_button(text, hint, color, key):
     html_str = f'<div id="anchor-{key}" class="giant-card-anchor"></div><style>[data-testid="stElementContainer"]:has(#anchor-{key}) + [data-testid="stElementContainer"] button p:nth-of-type(1), .element-container:has(#anchor-{key}) + .element-container button p:nth-of-type(1) {{ color: {color} !important; }}</style>'
     st.markdown(html_str, unsafe_allow_html=True)
@@ -236,8 +230,14 @@ with st.sidebar:
     if st.button("➕ 목록에 추가", use_container_width=True):
         if new_sheet and new_sheet not in st.session_state.saved_sheets:
             st.session_state.saved_sheets.append(new_sheet)
-            google_db.save_user_sheets(st.session_state.username, st.session_state.saved_sheets)
-            st.rerun()
+            res = google_db.save_user_sheets(st.session_state.username, st.session_state.saved_sheets)
+            if res is True:
+                st.toast("✅ 목록 영구 저장 완료!")
+                time.sleep(0.5)
+                st.rerun()
+            else:
+                st.session_state.saved_sheets.remove(new_sheet) # 원상복구
+                st.error(f"저장 실패: {res}")
             
     st.write("---")
     st.write("✅ **시트 선택 및 정렬**")
@@ -273,13 +273,21 @@ with st.sidebar:
         if selected_for_action:
             for s in selected_for_action:
                 st.session_state.saved_sheets.remove(s)
-            google_db.save_user_sheets(st.session_state.username, st.session_state.saved_sheets)
-            st.rerun()
+            res = google_db.save_user_sheets(st.session_state.username, st.session_state.saved_sheets)
+            if res is True:
+                st.toast("✅ 삭제 및 영구 저장 완료!")
+                time.sleep(0.5)
+                st.rerun()
+            else: st.error(f"삭제 실패: {res}")
 
     if c_sort.button("↕️ 정렬"):
         st.session_state.saved_sheets.sort(key=lambda x: updated_order[x])
-        google_db.save_user_sheets(st.session_state.username, st.session_state.saved_sheets)
-        st.rerun()
+        res = google_db.save_user_sheets(st.session_state.username, st.session_state.saved_sheets)
+        if res is True:
+            st.toast("✅ 정렬 및 영구 저장 완료!")
+            time.sleep(0.5)
+            st.rerun()
+        else: st.error(f"정렬 실패: {res}")
 
     st.divider()
     target = st.radio("🎯 학습 범위", ["오늘 복습 대상", "전체 단어장"], key="study_target")
