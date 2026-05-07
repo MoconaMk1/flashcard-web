@@ -85,37 +85,56 @@ def load_stats(sheet_name):
     return stats
 
 def save_stats(sheet_name, stats_dict):
-    if not sheet_name: # 시트 이름이 없으면 중단
+    if not sheet_name:
         return False
     try:
         worksheet = init_stats_sheet(sheet_name)
         worksheet.clear() 
-        rows = [["단어", "맞춘횟수", "틀린횟수"]]
+        # 열(Column) 5개로 확장
+        rows = [["단어", "맞춘횟수", "틀린횟수", "레벨", "다음복습일"]]
         for w, data in stats_dict.items():
-            rows.append([w, data.get("correct", 0), data.get("wrong", 0)])
+            rows.append([
+                w, 
+                data.get("correct", 0), 
+                data.get("wrong", 0),
+                data.get("level", 0),
+                data.get("next_review", "")
+            ])
         worksheet.update("A1", rows)
         return True
     except Exception as e:
-        print(f"저장 중 오류 발생: {e}")
+        print(f"저장 오류: {e}")
         return False
-
+        
 # 🎯 여러 시트의 데이터를 하나로 합쳐서 가져오는 업무
 def load_multiple_sheets(sheet_names):
-    all_words = {}
-    all_notes = {}
-    all_stats = {}
-    
-    for name in sheet_names:
+    combined_words = {}
+    combined_notes = {}
+    combined_stats = {}
+    for sheet_name in sheet_names:
+        # 1. 단어 로드
         try:
-            # 단어 로드
-            w, n = load_words_from_sheet(name)
-            all_words.update(w)
-            all_notes.update(n)
-            
-            # 통계 로드
-            s = load_stats(name)
-            all_stats.update(s)
-        except:
-            continue # 에러 나는 시트는 건너뜁니다.
-            
-    return all_words, all_notes, all_stats
+            w_sheet = client.open(sheet_name).worksheet("단어장")
+            records = w_sheet.get_all_values()
+            for row in records[1:]:
+                if len(row) >= 2 and row[0]:
+                    combined_words[row[0]] = row[1]
+                    if len(row) >= 3:
+                        combined_notes[row[0]] = row[2]
+        except: pass
+
+        # 2. 통계 로드 (레벨과 다음복습일 추가)
+        try:
+            s_sheet = client.open(sheet_name).worksheet("통계")
+            s_records = s_sheet.get_all_values()
+            for row in s_records[1:]:
+                if len(row) >= 1 and row[0]:
+                    w = row[0]
+                    c = int(row[1]) if len(row) > 1 and row[1].isdigit() else 0
+                    w_cnt = int(row[2]) if len(row) > 2 and row[2].isdigit() else 0
+                    lv = int(row[3]) if len(row) > 3 and row[3].isdigit() else 0
+                    nr = row[4] if len(row) > 4 else ""
+                    combined_stats[w] = {"correct": c, "wrong": w_cnt, "level": lv, "next_review": nr}
+        except: pass
+
+    return combined_words, combined_notes, combined_stats
