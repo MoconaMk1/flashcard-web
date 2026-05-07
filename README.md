@@ -1,3 +1,6 @@
 # flashcard-web
 
-ㅇㅇ
+```
+python -m venv venv
+venv\Scripts\activate
+```
