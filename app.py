@@ -223,21 +223,39 @@ def prepare_question():
     st.session_state.test_answered = False
     st.session_state.test_msg = ""
     current_w = st.session_state.test_queue[st.session_state.test_q_count]
+    
     if st.session_state.test_type == "객관식":
-        correct_m = st.session_state.words[current_w]
-        pool_m = [st.session_state.words[w] for w in st.session_state.all_words if w != current_w]
-        options = random.sample(pool_m, min(3, len(pool_m))) + [correct_m]
-        random.shuffle(options) # 객관식의 '선택지 번호'만 섞습니다.
+        # 🎯 방향 체크: 단어->뜻(is_w2m=True), 뜻->단어(is_w2m=False)
+        is_w2m = (st.session_state.test_mcq_direction == "단어 ➔ 뜻")
+        
+        if is_w2m:
+            correct_ans = st.session_state.words[current_w]
+            pool = [st.session_state.words[w] for w in st.session_state.all_words if w != current_w]
+        else:
+            correct_ans = current_w
+            pool = [w for w in st.session_state.all_words if w != current_w]
+            
+        # 선택지 4개 구성 (정답 1 + 오답 3)
+        options = random.sample(pool, min(3, len(pool))) + [correct_ans]
+        random.shuffle(options)
         st.session_state.test_options = options
 
 def submit_mcq(option):
     st.session_state.test_answered = True
     current_w = st.session_state.test_queue[st.session_state.test_q_count]
-    if option == st.session_state.words[current_w]:
-        st.session_state.test_score += 1; st.session_state.test_msg = "⭕ 정답입니다!"; update_stat(current_w, True)
+    
+    # 🎯 현재 방향에 따른 정답 설정
+    is_w2m = (st.session_state.test_mcq_direction == "단어 ➔ 뜻")
+    correct_ans = st.session_state.words[current_w] if is_w2m else current_w
+    
+    if option == correct_ans:
+        st.session_state.test_score += 1
+        st.session_state.test_msg = "⭕ 정답입니다!"
+        update_stat(current_w, True)
         play_sfx(True)
     else:
-        st.session_state.test_msg = f"❌ 오답입니다! (정답: {st.session_state.words[current_w]})"; update_stat(current_w, False)
+        st.session_state.test_msg = f"❌ 오답입니다! (정답: {correct_ans})"
+        update_stat(current_w, False)
         play_sfx(False)
 
 def submit_spell(user_text):
@@ -453,48 +471,42 @@ def tab_study_ui():
     render_audio_player()
 
 @st.fragment
-@st.fragment
 def tab_test_ui():
-    # 🎯 word_list 대신 all_words를 기준으로 체크해서, 빈 단어장이더라도 시험 탭 진입은 가능하게 수정
     if not st.session_state.all_words: st.info("시험을 볼 단어가 없습니다."); return
     
     if not st.session_state.test_active:
         st.session_state.test_finished = False
         
-        # 🎯 [신규] 시험 범위 선택 기능! (학습 범위와 별개로 자유롭게 타겟팅)
+        # 1. 시험 범위 선택
         test_target = st.selectbox("🎯 시험 범위 선택", 
                                  ["현재 학습 중인 목록 (사이드바 기준)", 
                                   "전체 단어", 
                                   "⚠️ 틀린 단어만 집중 시험", 
                                   "🆕 새 단어만 확인 시험"])
         
-        # 선택한 옵션에 맞춰 시험 대상 단어장 구성
-        if test_target == "현재 학습 중인 목록 (사이드바 기준)":
-            target_list = st.session_state.word_list
-        elif test_target == "전체 단어":
-            target_list = st.session_state.all_words
-        elif test_target == "⚠️ 틀린 단어만 집중 시험":
-            target_list = [w for w in st.session_state.all_words if st.session_state.stats.get(w, {}).get("level", 0) == 0 and st.session_state.stats.get(w, {}).get("wrong", 0) > 0]
-        elif test_target == "🆕 새 단어만 확인 시험":
-            target_list = [w for w in st.session_state.all_words if st.session_state.stats.get(w, {}).get("correct", 0) == 0 and st.session_state.stats.get(w, {}).get("wrong", 0) == 0]
+        if test_target == "현재 학습 중인 목록 (사이드바 기준)": target_list = st.session_state.word_list
+        elif test_target == "전체 단어": target_list = st.session_state.all_words
+        elif test_target == "⚠️ 틀린 단어만 집중 시험": target_list = [w for w in st.session_state.all_words if st.session_state.stats.get(w, {}).get("level", 0) == 0 and st.session_state.stats.get(w, {}).get("wrong", 0) > 0]
+        elif test_target == "🆕 새 단어만 확인 시험": target_list = [w for w in st.session_state.all_words if st.session_state.stats.get(w, {}).get("correct", 0) == 0 and st.session_state.stats.get(w, {}).get("wrong", 0) == 0]
             
-        # 해당 조건에 맞는 단어가 0개일 경우 차단
         if not target_list:
-            st.warning("선택하신 조건에 맞는 단어가 없습니다. 범위를 다시 선택해주세요.")
-            return
+            st.warning("선택하신 조건에 맞는 단어가 없습니다. 범위를 다시 선택해주세요."); return
             
         test_type = st.selectbox("시험 방식", ["객관식", "스펠링"])
-        # 🎯 최대 문제 수를 방금 추려낸 target_list의 갯수로 자동 제한!
+        
+        # 🎯 [신규] 객관식일 때만 방향 선택 메뉴 추가
+        if test_type == "객관식":
+            st.session_state.test_mcq_direction = st.selectbox("객관식 방향", ["단어 ➔ 뜻", "뜻 ➔ 단어"])
+        else:
+            st.session_state.test_mcq_direction = "단어 ➔ 뜻" # 스펠링은 단어 적는 게 목표니 고정
+        
         q_count = st.number_input("문제 수", min_value=1, max_value=len(target_list), value=min(10, len(target_list)))
         
         if st.button("🚀 시작", type="primary", use_container_width=True):
             st.session_state.test_active, st.session_state.test_type = True, test_type
             st.session_state.test_q_max, st.session_state.test_q_count, st.session_state.test_score = q_count, 0, 0
-            
-            # 🎯 시험 문제도 0순위->1순위->2순위 스마트 정렬 순서대로 출제!
             sorted_target = get_sorted_full_list(target_list, st.session_state.stats)
             st.session_state.test_queue = sorted_target[:q_count]
-            
             prepare_question(); st.rerun()
             
     elif st.session_state.test_finished:
@@ -509,8 +521,16 @@ def tab_test_ui():
             st.session_state.test_active = False; st.rerun()
         
         current_w = st.session_state.test_queue[st.session_state.test_q_count]
+        
         if st.session_state.test_type == "객관식":
-            if render_giant_button(current_w, "🔊 발음 듣기", "#2C3E50", "to"): play_audio(current_w)
+            # 🎯 [신규] 방향에 따라 카드 텍스트 결정
+            is_w2m = (st.session_state.test_mcq_direction == "단어 ➔ 뜻")
+            q_text = current_w if is_w2m else st.session_state.words[current_w]
+            hint_text = "🔊 발음 듣기" if is_w2m else "알맞은 영단어를 고르세요"
+            
+            if render_giant_button(q_text, hint_text, "#2C3E50", "to"): 
+                play_audio(current_w) # 소리는 항상 영어 단어 발음으로!
+                
             mcq_box = st.empty()
             if not st.session_state.test_answered:
                 with mcq_box.container():
@@ -524,16 +544,7 @@ def tab_test_ui():
                 with sb.container():
                     with st.form(f"f_{st.session_state.test_q_count}"):
                         u = st.text_input("영어 입력:")
-                        components.html(
-                            """
-                            <script>
-                            setTimeout(function() {
-                                const input = window.parent.document.querySelector('div[data-testid="stForm"] input[type="text"]');
-                                if (input) { input.focus(); }
-                            }, 100);
-                            </script>
-                            """, height=0, width=0
-                        )
+                        components.html("""<script>setTimeout(function() { const input = window.parent.document.querySelector('div[data-testid="stForm"] input[type="text"]'); if (input) { input.focus(); } }, 100);</script>""", height=0, width=0)
                         if st.form_submit_button("확인"): submit_spell(u); st.rerun()
             else: sb.empty()
 
@@ -541,20 +552,18 @@ def tab_test_ui():
             if "⭕" in st.session_state.test_msg: st.success(st.session_state.test_msg)
             else: st.error(st.session_state.test_msg)
             play_audio(current_w)
-            
             if st.session_state.test_q_count < st.session_state.test_q_max - 1:
                 st.session_state.auto_advance = True
             else:
-                with st.spinner("자동 저장 중..."):
-                    google_db.save_stats(st.session_state.current_sheet, st.session_state.stats, st.session_state.username)
+                with st.spinner("자동 저장 중..."): google_db.save_stats(st.session_state.current_sheet, st.session_state.stats, st.session_state.username)
                 time.sleep(1.5); st.session_state.test_finished = True; st.rerun()
 
     render_audio_player()
     render_sfx_player()
-    
     if st.session_state.auto_advance:
         st.session_state.auto_advance = False
         time.sleep(1.5); st.session_state.test_q_count += 1; prepare_question(); st.rerun()
+        
 @st.fragment
 def tab_notebook_ui():
     st.header("📓 영어 노트")
