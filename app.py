@@ -453,20 +453,47 @@ def tab_study_ui():
     render_audio_player()
 
 @st.fragment
+@st.fragment
 def tab_test_ui():
-    if not st.session_state.word_list: st.info("시험을 볼 단어가 없습니다."); return
+    # 🎯 word_list 대신 all_words를 기준으로 체크해서, 빈 단어장이더라도 시험 탭 진입은 가능하게 수정
+    if not st.session_state.all_words: st.info("시험을 볼 단어가 없습니다."); return
+    
     if not st.session_state.test_active:
         st.session_state.test_finished = False
+        
+        # 🎯 [신규] 시험 범위 선택 기능! (학습 범위와 별개로 자유롭게 타겟팅)
+        test_target = st.selectbox("🎯 시험 범위 선택", 
+                                 ["현재 학습 중인 목록 (사이드바 기준)", 
+                                  "전체 단어", 
+                                  "⚠️ 틀린 단어만 집중 시험", 
+                                  "🆕 새 단어만 확인 시험"])
+        
+        # 선택한 옵션에 맞춰 시험 대상 단어장 구성
+        if test_target == "현재 학습 중인 목록 (사이드바 기준)":
+            target_list = st.session_state.word_list
+        elif test_target == "전체 단어":
+            target_list = st.session_state.all_words
+        elif test_target == "⚠️ 틀린 단어만 집중 시험":
+            target_list = [w for w in st.session_state.all_words if st.session_state.stats.get(w, {}).get("level", 0) == 0 and st.session_state.stats.get(w, {}).get("wrong", 0) > 0]
+        elif test_target == "🆕 새 단어만 확인 시험":
+            target_list = [w for w in st.session_state.all_words if st.session_state.stats.get(w, {}).get("correct", 0) == 0 and st.session_state.stats.get(w, {}).get("wrong", 0) == 0]
+            
+        # 해당 조건에 맞는 단어가 0개일 경우 차단
+        if not target_list:
+            st.warning("선택하신 조건에 맞는 단어가 없습니다. 범위를 다시 선택해주세요.")
+            return
+            
         test_type = st.selectbox("시험 방식", ["객관식", "스펠링"])
-        q_count = st.number_input("문제 수", min_value=1, value=min(10, len(st.session_state.word_list)))
+        # 🎯 최대 문제 수를 방금 추려낸 target_list의 갯수로 자동 제한!
+        q_count = st.number_input("문제 수", min_value=1, max_value=len(target_list), value=min(10, len(target_list)))
         
         if st.button("🚀 시작", type="primary", use_container_width=True):
             st.session_state.test_active, st.session_state.test_type = True, test_type
             st.session_state.test_q_max, st.session_state.test_q_count, st.session_state.test_score = q_count, 0, 0
             
-            # 🎯 [대수술 완료] 랜덤 섞기(random.shuffle) 절대 금지!
-            # 무조건 학습 탭에서 정렬해둔 (오답->신규->복습) 리스트 순서 그대로 잘라서 가져옵니다.
-            st.session_state.test_queue = list(st.session_state.word_list)[:q_count]
+            # 🎯 시험 문제도 0순위->1순위->2순위 스마트 정렬 순서대로 출제!
+            sorted_target = get_sorted_full_list(target_list, st.session_state.stats)
+            st.session_state.test_queue = sorted_target[:q_count]
             
             prepare_question(); st.rerun()
             
@@ -477,7 +504,6 @@ def tab_test_ui():
         cp, cs = st.columns([7, 3])
         cp.progress(st.session_state.test_q_count / st.session_state.test_q_max)
         if cs.button("⏹️ 중단"): 
-            # 🎯 시험을 중간에 그만둬도 지금까지 풀었던 기록은 즉시 저장!
             with st.spinner("자동 저장 중..."):
                 google_db.save_stats(st.session_state.current_sheet, st.session_state.stats, st.session_state.username)
             st.session_state.test_active = False; st.rerun()
@@ -529,7 +555,6 @@ def tab_test_ui():
     if st.session_state.auto_advance:
         st.session_state.auto_advance = False
         time.sleep(1.5); st.session_state.test_q_count += 1; prepare_question(); st.rerun()
-
 @st.fragment
 def tab_notebook_ui():
     st.header("📓 영어 노트")
