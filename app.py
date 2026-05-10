@@ -355,23 +355,39 @@ with st.sidebar:
         res = google_db.save_user_settings(st.session_state.username, st.session_state.study_target, st.session_state.card_direction)
         if res is not True: st.error(f"설정 저장 실패: {res}")
 
-    st.radio("🎯 학습 범위 선택", ["전체 단어 (오답 우선)", "오늘 복습 대상만"], key="study_target", on_change=update_settings_callback)
+    # 🎯 [수정됨] 선택지에 '틀린 단어만', '새 단어만' 옵션 추가!
+    st.radio("🎯 학습 범위 선택", 
+             ["전체 단어 (오답 우선)", "오늘 복습 대상만", "⚠️ 틀린 단어만", "🆕 새 단어만"], 
+             key="study_target", 
+             on_change=update_settings_callback)
     
-    if st.session_state.study_target == "전체 단어 (오답 우선)":
-        st.session_state.word_list = get_sorted_full_list(st.session_state.all_words, st.session_state.stats) if 'all_words' in st.session_state else []
+    # 🎯 [수정됨] 선택한 옵션에 맞춰 단어장을 싹 필터링해주는 로직
+    if 'all_words' in st.session_state:
+        if st.session_state.study_target == "전체 단어 (오답 우선)":
+            st.session_state.word_list = get_sorted_full_list(st.session_state.all_words, st.session_state.stats)
+            
+        elif st.session_state.study_target == "오늘 복습 대상만":
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            due = [w for w in st.session_state.all_words if not st.session_state.stats.get(w, {}).get("next_review", "") or st.session_state.stats.get(w, {}).get("next_review", "") <= today_str]
+            st.session_state.word_list = get_sorted_full_list(due, st.session_state.stats)
+            
+        elif st.session_state.study_target == "⚠️ 틀린 단어만":
+            # 레벨이 0이면서 틀린 적이 있는 단어만 쏙 뽑아냄
+            wrong_words = [w for w in st.session_state.all_words if st.session_state.stats.get(w, {}).get("level", 0) == 0 and st.session_state.stats.get(w, {}).get("wrong", 0) > 0]
+            st.session_state.word_list = get_sorted_full_list(wrong_words, st.session_state.stats)
+            
+        elif st.session_state.study_target == "🆕 새 단어만":
+            # 맞춘 적도, 틀린 적도 없는 깨끗한 단어만 쏙 뽑아냄
+            new_words = [w for w in st.session_state.all_words if st.session_state.stats.get(w, {}).get("correct", 0) == 0 and st.session_state.stats.get(w, {}).get("wrong", 0) == 0]
+            st.session_state.word_list = get_sorted_full_list(new_words, st.session_state.stats)
     else:
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        due = [word for word in st.session_state.all_words if not st.session_state.stats.get(word, {}).get("next_review", "") or st.session_state.stats.get(word, {}).get("next_review", "") <= today_str]
-        st.session_state.word_list = get_sorted_full_list(due, st.session_state.stats) if 'all_words' in st.session_state else []
+        st.session_state.word_list = []
 
+    # 필터링 후 보고 있던 카드 번호가 범위를 초과하면 1번 카드로 자동 리셋
     if st.session_state.current_idx >= len(st.session_state.word_list) and len(st.session_state.word_list) > 0:
         st.session_state.current_idx = 0
 
     st.radio("🔄 카드 방향", ["단어 ➔ 뜻", "뜻 ➔ 단어"], key="card_direction", on_change=update_settings_callback)
-    
-    st.divider()
-    admin_pw = st.text_input("🔐 관리자 비번", type="password")
-    st.session_state.is_admin = (admin_pw == st.secrets["admin_password"])
 
 # ==========================================
 # 📱 메인 화면 렌더링
