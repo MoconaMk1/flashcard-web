@@ -477,7 +477,6 @@ def tab_test_ui():
     if not st.session_state.test_active:
         st.session_state.test_finished = False
         
-        # 1. 시험 범위 선택
         test_target = st.selectbox("🎯 시험 범위 선택", 
                                  ["현재 학습 중인 목록 (사이드바 기준)", 
                                   "전체 단어", 
@@ -494,11 +493,10 @@ def tab_test_ui():
             
         test_type = st.selectbox("시험 방식", ["객관식", "스펠링"])
         
-        # 🎯 [신규] 객관식일 때만 방향 선택 메뉴 추가
         if test_type == "객관식":
             st.session_state.test_mcq_direction = st.selectbox("객관식 방향", ["단어 ➔ 뜻", "뜻 ➔ 단어"])
         else:
-            st.session_state.test_mcq_direction = "단어 ➔ 뜻" # 스펠링은 단어 적는 게 목표니 고정
+            st.session_state.test_mcq_direction = "단어 ➔ 뜻"
         
         q_count = st.number_input("문제 수", min_value=1, max_value=len(target_list), value=min(10, len(target_list)))
         
@@ -523,13 +521,14 @@ def tab_test_ui():
         current_w = st.session_state.test_queue[st.session_state.test_q_count]
         
         if st.session_state.test_type == "객관식":
-            # 🎯 [신규] 방향에 따라 카드 텍스트 결정
             is_w2m = (st.session_state.test_mcq_direction == "단어 ➔ 뜻")
             q_text = current_w if is_w2m else st.session_state.words[current_w]
             hint_text = "🔊 발음 듣기" if is_w2m else "알맞은 영단어를 고르세요"
             
             if render_giant_button(q_text, hint_text, "#2C3E50", "to"): 
-                play_audio(current_w) # 소리는 항상 영어 단어 발음으로!
+                # 🎯 [수정됨] 문제가 영어일 때(단어->뜻)만 스포일러 방지를 위해 발음 재생!
+                if is_w2m: 
+                    play_audio(current_w) 
                 
             mcq_box = st.empty()
             if not st.session_state.test_answered:
@@ -551,7 +550,9 @@ def tab_test_ui():
         if st.session_state.test_answered:
             if "⭕" in st.session_state.test_msg: st.success(st.session_state.test_msg)
             else: st.error(st.session_state.test_msg)
+            # 🎯 정답을 맞히거나 틀린 후(결과가 나왔을 때)에는 확인 차원에서 무조건 영단어 발음을 들려줍니다!
             play_audio(current_w)
+            
             if st.session_state.test_q_count < st.session_state.test_q_max - 1:
                 st.session_state.auto_advance = True
             else:
